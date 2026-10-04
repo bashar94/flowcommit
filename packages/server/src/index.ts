@@ -2,11 +2,12 @@ import express, { type ErrorRequestHandler } from "express";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, watch, type FSWatcher } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
-import { ZodError } from "zod";
+import { mkdir, readFile, readdir, stat } from "node:fs/promises";
+import { ZodError, z } from "zod";
 import {
   DraftFlowSchema,
   DraftRequestSchema,
+  ImportedFlowSchema,
   FLOW_DIR,
   FLOW_FILE,
   PROVIDER_IDS,
@@ -20,8 +21,8 @@ import {
 import { Project } from "./project.ts";
 import { History, HttpError } from "./history.ts";
 import { git } from "./git.ts";
-import { ask, cleanText, extractJson, providerStatus } from "./ai.ts";
-import { DRAFT_SYSTEM, WRITE_SYSTEM, draftPrompt, writePrompt } from "./prompts.ts";
+import { ask, askInProject, cleanText, extractJson, providerStatus } from "./ai.ts";
+import { DRAFT_SYSTEM, IMPORT_SYSTEM, WRITE_SYSTEM, draftPrompt, importPrompt, writePrompt } from "./prompts.ts";
 import {
   addAgentsInstructions,
   addClaudeHook,
@@ -106,8 +107,12 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
-app.get("/api/project", (_req, res) => {
-  res.json({ name: project.name, path: project.root });
+/** Files FlowCommit or AI tools add, which don't make a folder count as having code. */
+const NOT_CODE = new Set([FLOW_DIR, ".git", ".mcp.json", ".claude", "AGENTS.md", ".DS_Store", ".gitignore"]);
+
+app.get("/api/project", async (_req, res) => {
+  const entries = await readdir(project.root).catch(() => [] as string[]);
+  res.json({ name: project.name, path: project.root, hasCode: entries.some((e) => !NOT_CODE.has(e)) });
 });
 
 app.get("/api/projects", async (_req, res) => {
@@ -278,6 +283,32 @@ app.post("/api/ai/draft", async (req, res) => {
   res.json({ ...parsed.data, arrows });
 });
 
+/** Reads the project's code (without changing it) and draws the flow it finds. */
+app.post("/api/ai/import", async (req, res) => {
+  const provider = z.enum(PROVIDER_IDS).parse(req.body?.provider);
+  const reply = await askInProject(provider, IMPORT_SYSTEM, importPrompt(), project.root, abortOnClose(res));
+  const parsed = ImportedFlowSchema.safeParse(extractJson(reply));
+  if (!parsed.success) throw new HttpError(502, "The AI drew a flowchart FlowCommit couldn't read. Try again.");
+  const ids = new Set(parsed.data.steps.map((s) => s.id));
+  const steps = await Promise.all(
+    parsed.data.steps.map(async (s) => ({ ...s, files: await existingFiles(s.files) })),
+  );
+  const arrows = parsed.data.arrows.filter((a) => ids.has(a.from) && ids.has(a.to) && a.from !== a.to);
+  res.json({ ...parsed.data, steps, arrows });
+});
+
+/** Keeps the paths that are real files inside the project, written relative to it. */
+async function existingFiles(files: string[]): Promise<string[]> {
+  const found: string[] = [];
+  for (const f of files) {
+    const full = path.resolve(project.root, f);
+    const rel = path.relative(project.root, full);
+    if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) continue;
+    if (await stat(full).then((st) => st.isFile(), () => false)) found.push(rel.split(path.sep).join("/"));
+  }
+  return [...new Set(found)].slice(0, 8);
+}
+
 // ----- Building with an AI agent -----
 
 app.get("/api/build", async (_req, res) => {
@@ -344,6 +375,35 @@ app.post("/api/sync/analyze", async (req, res) => {
  * A suggestion the person accepted came from the code, so the code already does it. The step is
  * recorded as built with its new design, instead of being sent back to the AI to build again.
  */
+/**
+ * Steps drawn from code that already exists count as built, so the build only covers what's
+ * new, and later edits to that code are noticed. Sending `remove` forgets steps again (undo).
+ */
+app.post("/api/build/imported", async (req, res) => {
+  const body = z
+    .object({
+      steps: z.array(z.object({ stepId: z.string(), spec: StepSpecSchema, files: z.array(z.string()) })).default([]),
+      remove: z.array(z.string()).default([]),
+      source: z.string().default(""),
+    })
+    .parse(req.body);
+  for (const id of body.remove) await project.updateStep(id, () => null);
+  for (const step of body.steps) {
+    const files = await existingFiles(step.files);
+    const fileHashes = await fingerprint(project, files);
+    await project.updateStep(step.stepId, () => ({
+      state: "built",
+      note: "Already in the code when the flow was drawn.",
+      files,
+      fileHashes,
+      agent: body.source,
+      updatedAt: new Date().toISOString(),
+      builtSpec: step.spec,
+    }));
+  }
+  res.json({ status: await project.readStatus() });
+});
+
 app.post("/api/sync/accepted", async (req, res) => {
   const stepId = String(req.body?.stepId ?? "");
   if (!stepId) throw new HttpError(400, "Say which step the suggestion was about.");

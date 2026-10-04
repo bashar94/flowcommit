@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { DraftFlow } from "@flowcommit/shared";
+import type { DraftFlow, ImportedFlow } from "@flowcommit/shared";
 import { api } from "../api.ts";
 import { useAi } from "../ai.tsx";
 import { Icon } from "../icons.tsx";
@@ -8,6 +8,7 @@ import { TEMPLATES, type Template } from "../templates.ts";
 type Props = {
   initialDescription: string;
   onDraft: (draft: DraftFlow, description: string) => void;
+  onImport: (flow: ImportedFlow) => void;
   onTemplate: (t: Template) => void;
   onBlank: () => void;
 };
@@ -18,16 +19,29 @@ const EXAMPLES = [
   "A team standup bot that asks three questions every morning and posts a summary.",
 ];
 
-/** First thing a new project sees: describe the app and let AI draw the flow, or start from a template. */
-export function Welcome({ initialDescription, onDraft, onTemplate, onBlank }: Props) {
+/**
+ * First thing a new project sees: describe the app and let AI draw the flow, or start from a
+ * template. A folder that already has code is offered a flow drawn from that code first.
+ */
+export function Welcome({ initialDescription, onDraft, onImport, onTemplate, onBlank }: Props) {
   const { active, providers } = useAi();
   const [description, setDescription] = useState(initialDescription);
-  const [running, setRunning] = useState<{ controller: AbortController; startedAt: number } | null>(null);
+  const [fromCode, setFromCode] = useState(false);
+  const [running, setRunning] = useState<{ controller: AbortController; startedAt: number; what: "draft" | "import" } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
   const textRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => textRef.current?.focus(), []);
+  useEffect(() => {
+    api
+      .project()
+      .then((p) => setFromCode(p.hasCode))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!fromCode) textRef.current?.focus();
+  }, [fromCode]);
 
   useEffect(() => {
     if (!running) return;
@@ -42,7 +56,7 @@ export function Welcome({ initialDescription, onDraft, onTemplate, onBlank }: Pr
     const controller = new AbortController();
     setError("");
     setElapsed(0);
-    setRunning({ controller, startedAt: Date.now() });
+    setRunning({ controller, startedAt: Date.now(), what: "draft" });
     try {
       const result = await api.aiDraft({ provider: active.id, description: description.trim() }, controller.signal);
       setRunning(null);
@@ -53,7 +67,83 @@ export function Welcome({ initialDescription, onDraft, onTemplate, onBlank }: Pr
     }
   };
 
+  const importCode = async () => {
+    if (!active) return;
+    const controller = new AbortController();
+    setError("");
+    setElapsed(0);
+    setRunning({ controller, startedAt: Date.now(), what: "import" });
+    try {
+      const result = await api.aiImport(active.id, controller.signal);
+      setRunning(null);
+      onImport(result);
+    } catch (err) {
+      setRunning(null);
+      if ((err as Error).name !== "AbortError") setError((err as Error).message);
+    }
+  };
+
   const noAi = providers.length > 0 && !active;
+  const status = running && (
+    <>
+      <span className="ai-status">
+        <span className="ai-pulse" aria-hidden="true">
+          <Icon name="sparkle" size={14} />
+        </span>
+        {active?.label} is {running.what === "import" ? "reading your code" : "drawing your flow"}…{" "}
+        {elapsed > 0 && <span className="ai-elapsed">{elapsed}s</span>}
+      </span>
+      <button type="button" className="button-quiet" onClick={() => running.controller.abort()}>
+        Cancel
+      </button>
+    </>
+  );
+
+  if (fromCode) {
+    return (
+      <div className="welcome">
+        <div className="welcome-card">
+          <h1 className="welcome-title">Map the app you already have</h1>
+          <p className="welcome-lead">
+            This folder already has code. {active ? active.label : "AI"} can read it, without changing anything, and draw
+            the flow it finds. Steps the code already does are marked as built, so from here on you change the app by
+            changing the flowchart.
+          </p>
+          <div className="welcome-actions">
+            {running ? (
+              status
+            ) : (
+              <>
+                <button type="button" className="button-primary button-large" disabled={!active} onClick={() => void importCode()}>
+                  <Icon name="sparkle" size={16} /> Draw it from my code
+                </button>
+                <button type="button" className="button-quiet" onClick={() => setFromCode(false)}>
+                  Describe a new app instead
+                </button>
+              </>
+            )}
+          </div>
+          {running?.what === "import" && (
+            <p className="welcome-note">Reading a whole project can take a few minutes. You can keep this tab open and wait.</p>
+          )}
+          {noAi && (
+            <p className="welcome-note">
+              To read your code, install <a href="https://claude.com/claude-code" target="_blank" rel="noreferrer">Claude Code</a> or{" "}
+              <a href="https://github.com/openai/codex" target="_blank" rel="noreferrer">Codex CLI</a> and sign in once.
+            </p>
+          )}
+          {error && (
+            <p className="inspector-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button type="button" className="button-quiet welcome-skip" disabled={!!running} onClick={onBlank}>
+            Start with a blank canvas
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="welcome">
@@ -86,17 +176,7 @@ export function Welcome({ initialDescription, onDraft, onTemplate, onBlank }: Pr
           />
           <div className="welcome-actions">
             {running ? (
-              <>
-                <span className="ai-status">
-                  <span className="ai-pulse" aria-hidden="true">
-                    <Icon name="sparkle" size={14} />
-                  </span>
-                  {active?.label} is drawing your flow… {elapsed > 0 && <span className="ai-elapsed">{elapsed}s</span>}
-                </span>
-                <button type="button" className="button-quiet" onClick={() => running.controller.abort()}>
-                  Cancel
-                </button>
-              </>
+              status
             ) : (
               <>
                 <button type="submit" className="button-primary button-large" disabled={!active || !description.trim()}>

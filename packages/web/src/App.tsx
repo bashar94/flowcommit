@@ -28,6 +28,7 @@ import {
   serializeFlow,
   type DraftFlow,
   type FlowFile,
+  type ImportedFlow,
   type NodeKind,
 } from "@flowcommit/shared";
 import { api, type Graph, type HistoryState, type PullRequest, type Version } from "./api.ts";
@@ -135,13 +136,28 @@ export function App() {
     const frame = requestAnimationFrame(() => updateNodeInternals(unmeasured.split(",")));
     return () => cancelAnimationFrame(frame);
   }, [unmeasured, updateNodeInternals]);
+  // React Flow hands back a new helper object once the canvas mounts. Reading it through a ref
+  // keeps loadFlow stable, so the flow loads once instead of again after mounting.
+  const rfRef = useRef(rf);
+  rfRef.current = rf;
   const fitRef = useRef<FitViewOptions>(FIT_VIEW);
   fitRef.current = view.options.outline ? FIT_WITH_OUTLINE : FIT_VIEW;
 
-  /** Zooms to the whole flow once React Flow has taken in new positions (a frame or two later). */
+  /**
+   * Zooms to the whole flow once React Flow has taken in new positions (a frame or two later).
+   * Browsers don't draw tabs in the background, so if the person switched away while AI was
+   * working, this waits until they come back.
+   */
   const fitSoon = useCallback(() => {
-    setTimeout(() => void rf.fitView({ ...fitRef.current, duration: 400 }), 60);
-  }, [rf]);
+    const fit = () => setTimeout(() => void rfRef.current.fitView({ ...fitRef.current, duration: 400 }), 60);
+    if (document.visibilityState === "visible") return void fit();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      document.removeEventListener("visibilitychange", onVisible);
+      fit();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+  }, []);
 
   // A drafted or template flow is laid out again once its cards are drawn, because only then
   // are their real sizes known. Then the view zooms to show all of it.
@@ -165,10 +181,6 @@ export function App() {
   const loadRun = useRef(0);
   // Set once the undo history exists below; loading a different flow starts a fresh history.
   const resetUndo = useRef<() => void>(() => {});
-  // React Flow hands back a new helper object once the canvas mounts. Reading it through a ref
-  // keeps loadFlow stable, so the flow loads once instead of again after mounting.
-  const rfRef = useRef(rf);
-  rfRef.current = rf;
 
   const loadFlow = useCallback(async (opts: { keepView?: boolean } = {}) => {
     const run = ++loadRun.current;
@@ -226,6 +238,9 @@ export function App() {
     void loadGraph();
   }, [loadFlow, loadHistory, loadGraph]);
 
+  // Saving can change what Sync shows (a deleted step whose code is left over, say). Set below.
+  const afterSave = useRef(() => {});
+
   // Autosave: every change to the design is written to .flowcommit/flow.json shortly after it happens.
   useEffect(() => {
     if (load.status !== "ready") return;
@@ -241,6 +256,7 @@ export function App() {
         .then(() => {
           savedText.current = text;
           if (latest.current?.text === text) setSave({ status: "saved" });
+          afterSave.current();
         })
         .catch((err: Error) => setSave({ status: "failed", message: err.message }));
     }, SAVE_DELAY_MS);
@@ -285,6 +301,7 @@ export function App() {
   // watcher's echo of that change doesn't show a second, confusing notice.
   const ownGitChangeUntil = useRef(0);
   const sync = useSync();
+  afterSave.current = () => void sync.refresh();
   const [syncOpen, setSyncOpen] = useState(false);
   const build = useBuild(draft, () => {
     const unsaved = latest.current && latest.current.text !== savedText.current;
@@ -494,7 +511,7 @@ export function App() {
 
   /** Replaces the canvas with a drafted or template flow, laid out top to bottom. */
   const applyFlow = useCallback(
-    (flow: DraftFlow, description: string, message: string) => {
+    (flow: DraftFlow, description: string, message: string, onUndo?: () => void) => {
       const before = { meta, nodes, edges };
       const ids = new Map(flow.steps.map((s) => [s.id, newId("n")]));
       const arrows = flow.arrows.map((a) => ({ source: ids.get(a.from)!, target: ids.get(a.to)!, label: a.label }));
@@ -520,12 +537,40 @@ export function App() {
             setNodes(before.nodes);
             setEdges(before.edges);
             setWelcomeDismissed(false);
+            onUndo?.();
           },
         },
       });
+      return ids;
     },
     [meta, nodes, edges, setNodes, setEdges, notify],
   );
+
+  /** Draws a flow the AI read from the project's code. Steps the code already does count as built. */
+  const applyImported = async (flow: ImportedFlow) => {
+    let stepIds = new Map<string, string>();
+    const forget = () => void api.markImported({ remove: [...stepIds.values()] }).then(() => build.refresh());
+    stepIds = applyFlow(
+      flow,
+      flow.description,
+      `${ai?.label ?? "AI"} drew ${flow.steps.length} steps from your code. Check it over, then save a version.`,
+      forget,
+    );
+    const done = flow.steps.filter((s) => s.done);
+    try {
+      await api.markImported({
+        source: ai?.label ?? "",
+        steps: done.map((s) => ({
+          stepId: stepIds.get(s.id)!,
+          spec: specOf({ kind: s.kind, title: s.title, instructions: s.instructions, attachments: [], tags: [] }),
+          files: s.files,
+        })),
+      });
+      await build.refresh();
+    } catch (err) {
+      notify(`The flow is drawn, but FlowCommit couldn't mark its steps as built: ${(err as Error).message}`);
+    }
+  };
 
   /** Re-arranges every step top to bottom, keeping all text and arrows as they are. */
   const tidyUp = useCallback(() => {
@@ -1007,6 +1052,7 @@ export function App() {
             {showWelcome ? (
               <Welcome
                 initialDescription={meta.description}
+                onImport={applyImported}
                 onDraft={(flow, description) =>
                   applyFlow(
                     flow,

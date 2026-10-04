@@ -95,3 +95,36 @@ Rules:
 - Titles are 2 to 6 words. Instructions are 1 to 3 specific sentences an AI coding agent can build from.
 - Every arrow connects ids that exist in "steps".`;
 }
+
+export const IMPORT_SYSTEM = `You are reading an existing codebase to draw its flowchart for FlowCommit, an app where people plan software as a flowchart and AI coding agents build it step by step. From now on, the flowchart is how the person will understand and change this app, so it must describe what the code really does.
+You can read files but you must not change anything. When you have read enough, reply with one JSON object and nothing else.`;
+
+export function importPrompt(): string {
+  const kinds = NODE_KINDS.map((k) => `"${k}" (${NODE_KIND_INFO[k].hint.toLowerCase()})`).join(", ");
+  return `Read the code in the current folder and draw the app's main flow as it works today.
+
+Start with the README, package or project files and the entry points, then follow the main paths through the code. Skip dependencies, build output and generated files.
+
+Reply with JSON in exactly this shape:
+{
+  "name": "Short app name",
+  "description": "One or two sentences on what the app is and who it's for.",
+  "steps": [
+    { "id": "s1", "kind": "start", "title": "User opens the app", "instructions": "...", "files": ["src/main.ts"], "done": true }
+  ],
+  "arrows": [
+    { "from": "s1", "to": "s2", "label": "" }
+  ]
+}
+
+Rules:
+- "kind" is one of: ${kinds}.
+- Begin with exactly one "start" step and finish with at least one "end" step.
+- Use 6 to 16 steps for the paths a user actually takes, plus the most important error path. Group small details into one step rather than listing every function.
+- A "decision" step has two or more outgoing arrows, each labeled with the answer (like "Yes" and "No").
+- Titles are 2 to 6 words, in plain language a non-programmer understands.
+- Instructions are 1 to 3 sentences describing what this step does in the code today, specific enough that an AI coding agent could rebuild or change it. Mention notable libraries or services by name.
+- "files" lists the 1 to 5 source files that do this step, as paths relative to the current folder. Use [] for steps with no code of their own, like the start.
+- "done" is false when the code only partly does the step (a stub, a TODO, a missing piece); say what's missing in the instructions.
+- Every arrow connects ids that exist in "steps".`;
+}

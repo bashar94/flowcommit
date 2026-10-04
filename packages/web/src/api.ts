@@ -2,6 +2,7 @@ import type {
   BuildStatus,
   DiffStats,
   DraftFlow,
+  ImportedFlow,
   FlowFile,
   ProviderId,
   StepSpec,
@@ -118,7 +119,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  project: () => request<{ name: string; path: string }>("/api/project"),
+  project: () => request<ProjectRef & { hasCode: boolean }>("/api/project"),
 
   projects: () => request<{ current: ProjectRef; recent: RecentProject[] }>("/api/projects"),
 
@@ -158,6 +159,12 @@ export const api = {
 
   aiDraft: (body: { provider: ProviderId; description: string }, signal?: AbortSignal) =>
     request<DraftFlow>("/api/ai/draft", { ...json(body), signal }),
+
+  aiImport: (provider: ProviderId, signal?: AbortSignal) =>
+    request<ImportedFlow>("/api/ai/import", { ...json({ provider }), signal }),
+
+  markImported: (body: { steps?: { stepId: string; spec: StepSpec; files: string[] }[]; remove?: string[]; source?: string }) =>
+    request<{ status: BuildStatus }>("/api/build/imported", json(body)),
 
   buildInfo: () => request<BuildInfo>("/api/build"),
 

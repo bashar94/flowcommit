@@ -52,3 +52,26 @@ export const DraftFlowSchema = z.object({
   arrows: z.array(z.object({ from: z.string(), to: z.string(), label: z.string().default("") })).default([]),
 });
 export type DraftFlow = z.infer<typeof DraftFlowSchema>;
+
+/**
+ * A flow drawn from code that already exists. Each step lists the files that do it, so
+ * FlowCommit can count those steps as built and notice when that code changes later.
+ */
+export const ImportedFlowSchema = DraftFlowSchema.extend({
+  description: z.string().default(""),
+  steps: z
+    .array(
+      z.object({
+        id: z.string(),
+        kind: z.enum(NODE_KINDS),
+        title: z.string(),
+        instructions: z.string().default(""),
+        files: z.array(z.string()).default([]),
+        /** False when the code only partly does this step, like a stub or a TODO. */
+        done: z.boolean().default(true),
+      }),
+    )
+    .min(2)
+    .max(40),
+});
+export type ImportedFlow = z.infer<typeof ImportedFlowSchema>;
