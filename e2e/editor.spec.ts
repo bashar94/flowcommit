@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
@@ -110,4 +110,35 @@ test("the View menu's Simple preset hides instructions on the cards", async ({ p
   await expect(instructions).toBeHidden();
   await page.getByRole("button", { name: "Detailed" }).click();
   await expect(instructions).toBeVisible();
+});
+
+test("a project with code can be drawn from its code, with those steps marked built", async ({ page }) => {
+  // Some existing code, and a stand-in for the AI's answer so the test doesn't need an AI tool.
+  await mkdir(path.join(projectDir, "src"), { recursive: true });
+  await writeFile(path.join(projectDir, "src", "notes.js"), "export const notes = [];\n");
+  const steps = ["Open the app", "Notes list", "Add a note", "Save notes", "Delete a note", "Done"];
+  await page.route("**/api/ai/import", (route) =>
+    route.fulfill({
+      json: {
+        name: "Notes",
+        description: "A small notes app.",
+        steps: steps.map((title, i) => ({
+          id: `s${i}`,
+          kind: i === 0 ? "start" : i === steps.length - 1 ? "end" : i === 3 ? "data" : "screen",
+          title,
+          instructions: "",
+          files: i === 0 || i === steps.length - 1 ? [] : ["src/notes.js"],
+          done: title !== "Delete a note",
+        })),
+        arrows: steps.slice(1).map((_, i) => ({ from: `s${i}`, to: `s${i + 1}`, label: "" })),
+      },
+    }),
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "Draw it from my code" }).click();
+  await expect(cards(page)).toHaveCount(6);
+  await expect(card(page, "Notes list")).toContainText("Built");
+  await expect(card(page, "Delete a note")).not.toContainText("Built");
+  // The view zooms out to show every step.
+  for (const title of steps) await expect(card(page, title)).toBeInViewport();
 });
