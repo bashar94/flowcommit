@@ -3,11 +3,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Project } from "./project.ts";
 
+/**
+ * How to run one of FlowCommit's scripts (mcp or hook). The installed app runs its bundled
+ * JavaScript with Node; a copy of the source runs the TypeScript through tsx.
+ */
+function scriptLaunch(name: "mcp" | "hook"): string[] {
+  if (import.meta.filename.endsWith(".js")) return [path.join(import.meta.dirname, `${name}.js`)];
+  return [fileURLToPath(import.meta.resolve("tsx/cli")), path.join(import.meta.dirname, `${name}.ts`)];
+}
+
 /** How an AI CLI should start FlowCommit's MCP server for this project. */
 export function mcpLaunch(project: Project) {
-  const tsx = fileURLToPath(import.meta.resolve("tsx/cli"));
-  const script = path.join(import.meta.dirname, "mcp.ts");
-  return { command: process.execPath, args: [tsx, script, "--project", project.root] };
+  return { command: process.execPath, args: [...scriptLaunch("mcp"), "--project", project.root] };
 }
 
 const quote = (s: string) => (/^[\w./:@-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`);
@@ -57,10 +64,8 @@ const HOOK_MARKER = "flowcommit-hook";
 
 /** The shell command Claude Code runs before each message. Paths are quoted because they can contain spaces. */
 function hookCommand(): string {
-  const tsx = fileURLToPath(import.meta.resolve("tsx/cli"));
-  const script = path.join(import.meta.dirname, "hook.ts");
   const q = (s: string) => `"${s.replaceAll('"', '\\"')}"`;
-  return `${q(process.execPath)} ${q(tsx)} ${q(script)} --project "$CLAUDE_PROJECT_DIR" # ${HOOK_MARKER}`;
+  return `${[process.execPath, ...scriptLaunch("hook")].map(q).join(" ")} --project "$CLAUDE_PROJECT_DIR" # ${HOOK_MARKER}`;
 }
 
 const claudeSettingsPath = (project: Project) => path.join(project.root, ".claude", "settings.json");

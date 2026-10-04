@@ -1,16 +1,32 @@
 {
   "name": "flowcommit",
+  "version": "0.1.0",
+  "description": "Visual version control and an IDE for vibe coders: design your app as a flowchart, let AI agents build it, and keep every version in Git.",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
+  "bin": {
+    "flowcommit": "bin/flowcommit.mjs"
+  },
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.19"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w @flowcommit/server\" \"npm run dev -w @flowcommit/web\"",
     "typecheck": "tsc -p packages/shared && tsc -p packages/server && tsc -p packages/web",
     "test": "npm test --workspaces --if-present",
-    "build": "npm run build -w @flowcommit/web"
+    "build": "node scripts/build.mjs",
+    "start": "node bin/flowcommit.mjs"
   },
   "devDependencies": {
     "concurrently": "^10.0.5",
+    "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
   }
 }

@@ -1,5 +1,6 @@
 import express, { type ErrorRequestHandler } from "express";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, watch, type FSWatcher } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { ZodError } from "zod";
@@ -496,16 +497,45 @@ const onError: ErrorRequestHandler = (err, _req, res, _next) => {
 };
 app.use(onError);
 
-const listener = app.listen(PORT, "127.0.0.1", () => {
-  console.log(`FlowCommit server on http://127.0.0.1:${PORT}`);
-  console.log(`Project: ${project.root}`);
-});
-listener.on("error", (err: NodeJS.ErrnoException) => {
-  if (err.code === "EADDRINUSE") {
+/**
+ * The installed app (npm run build) serves the editor itself, so it's all on one port. During
+ * development Vite serves the editor instead.
+ */
+const webDir = process.env.FLOWCOMMIT_WEB_DIR ?? path.join(import.meta.dirname, "../web");
+const serveWeb = existsSync(path.join(webDir, "index.html"));
+if (serveWeb) {
+  app.use(express.static(webDir, { index: "index.html" }));
+  app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(webDir, "index.html")));
+}
+
+// The command-line app looks for a free port when you didn't ask for a particular one.
+const AUTO_PORT = process.env.FLOWCOMMIT_PORT_AUTO === "1";
+function listen(port: number, triesLeft: number) {
+  // Express 5 calls this on failure too; failures are handled below.
+  const listener = app.listen(port, "127.0.0.1", (err?: Error) => {
+    if (err) return;
+    const url = `http://localhost:${port}`;
+    console.log(serveWeb ? `FlowCommit is running at ${url}` : `FlowCommit server on http://127.0.0.1:${port}`);
+    console.log(`Project: ${project.root}`);
+    if (serveWeb && process.env.FLOWCOMMIT_OPEN === "1") openBrowser(url);
+  });
+  listener.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code !== "EADDRINUSE") throw err;
+    if (AUTO_PORT && triesLeft > 0) return listen(port + 1, triesLeft - 1);
     console.error(
-      `Port ${PORT} is already used, probably by another FlowCommit. Stop it, or run this one on other ports: FLOWCOMMIT_PORT=4319 FLOWCOMMIT_WEB_PORT=5319 npm run dev`,
+      serveWeb
+        ? `Port ${port} is already used. Pick another one: flowcommit --port ${port + 1}`
+        : `Port ${port} is already used, probably by another FlowCommit. Stop it, or run this one on other ports: FLOWCOMMIT_PORT=4319 FLOWCOMMIT_WEB_PORT=5319 npm run dev`,
     );
     process.exit(1);
-  }
-  throw err;
-});
+  });
+}
+listen(PORT, 20);
+
+function openBrowser(url: string) {
+  const [cmd, args] =
+    process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
+  spawn(cmd, args, { stdio: "ignore", detached: true })
+    .on("error", () => console.log(`Open ${url} in your browser.`))
+    .unref();
+}
