@@ -13,6 +13,8 @@ import {
   useUpdateNodeInternals,
   type Connection,
   type OnNodesChange,
+  type Node,
+  type ReactFlowInstance,
   type FitViewOptions,
   type IsValidConnection,
   type OnConnectEnd,
@@ -59,6 +61,7 @@ import { Welcome } from "./components/Welcome.tsx";
 import { ProjectMenu } from "./components/ProjectMenu.tsx";
 import { GroupActionsContext, GroupCard, GroupFrames, type GroupActions } from "./components/Groups.tsx";
 import { foldGroups, isGroupCard, newGroupId, type CanvasNode } from "./groups.ts";
+import { download, fileName, flowPicture, printPicture } from "./exportImage.ts";
 import { AiPicker } from "./components/AiPicker.tsx";
 import { useToast } from "./components/Toasts.tsx";
 import { useAi } from "./ai.tsx";
@@ -931,6 +934,32 @@ export function App() {
     });
   }, [tour, edges, rf, view.options.outline]);
 
+  /** Saves a picture of the flow as it looks now, for sharing in a doc or a chat. */
+  const exportFlow = (format: "png" | "pdf") => {
+    setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
+    setHoveredId(null);
+    // Give the canvas a frame to drop the selection highlight before drawing it.
+    const picture = new Promise<void>((resolve) => setTimeout(resolve, 60)).then(() =>
+      flowPicture(rf as unknown as ReactFlowInstance<Node>),
+    );
+    const title = meta.name || "Flowchart";
+    if (format === "pdf") {
+      try {
+        printPicture(title, picture);
+      } catch (err) {
+        notify((err as Error).message);
+      }
+      return;
+    }
+    picture.then(
+      (src) => {
+        download(src, fileName(title, "png"));
+        notify("Picture saved to your downloads");
+      },
+      (err: Error) => notify(`FlowCommit couldn't make the picture: ${err.message}`),
+    );
+  };
+
   const isBlank =
     nodes.length <= 1 &&
     edges.length === 0 &&
@@ -989,7 +1018,11 @@ export function App() {
           onReviewBranch={(b) => void reviewBranch(b)}
           onReviewPullRequest={(pr) => void reviewPullRequest(pr)}
         />
-        <ViewMenu options={view.options} onChange={view.setOptions} />
+        <ViewMenu
+          options={view.options}
+          onChange={view.setOptions}
+          onExport={mode === "edit" && load.status === "ready" && !showWelcome ? exportFlow : undefined}
+        />
         <button
           type="button"
           className="view-button"

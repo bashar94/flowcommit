@@ -72,7 +72,16 @@ export function useViewOptions() {
 
 const same = (a: ViewOptions, b: ViewOptions) => VIEW_DETAILS.every((d) => a[d.key] === b[d.key]);
 
-export function ViewMenu({ options, onChange }: { options: ViewOptions; onChange: (o: ViewOptions) => void }) {
+export function ViewMenu({
+  options,
+  onChange,
+  onExport,
+}: {
+  options: ViewOptions;
+  onChange: (o: ViewOptions) => void;
+  /** Saves a picture of the flow. Leave it out where there's nothing to export. */
+  onExport?: (format: "png" | "pdf") => void;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -124,6 +133,20 @@ export function ViewMenu({ options, onChange }: { options: ViewOptions; onChange
               </li>
             ))}
           </ul>
+          {onExport && (
+            <div className="view-export">
+              <p className="popover-title">Share a picture</p>
+              <p className="inspector-note">Drawn the way you see it now, with the details you picked above.</p>
+              <div className="sync-actions">
+                <button type="button" className="button" onClick={() => { setOpen(false); onExport("png"); }}>
+                  <Icon name="image" size={14} /> Download PNG
+                </button>
+                <button type="button" className="button" onClick={() => { setOpen(false); onExport("pdf"); }}>
+                  <Icon name="download" size={14} /> Print or save as PDF
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

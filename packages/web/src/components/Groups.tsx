@@ -135,7 +135,7 @@ function Frame({
         ) : (
           <span className="group-title">{group.title || "Untitled group"}</span>
         )}
-        <span className="group-frame-actions">
+        <span className="group-frame-actions" data-export-hide>
           <button type="button" className="icon-button" title="Fold into one card" aria-label={`Fold ${group.title}`} onClick={() => actions.fold(group.id)}>
             <Icon name="chevron" size={14} />
           </button>

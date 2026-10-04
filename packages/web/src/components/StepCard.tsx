@@ -167,6 +167,7 @@ function StepCardImpl({ id, data, selected }: NodeProps<StepNode>) {
         <button
           type="button"
           className="step-add nodrag"
+          data-export-hide
           title="Add the next step (Tab)"
           aria-label="Add the next step"
           onClick={(e) => {

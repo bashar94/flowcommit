@@ -4559,3 +4559,10 @@ button.change-row:hover {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.view-export {
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
