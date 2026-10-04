@@ -8,14 +8,33 @@ the code from it. Every change to the design becomes a version you can compare.
 
 ## Run it
 
+Build it once, then start it in any project folder:
+
+```sh
+npm install
+npm run build
+npx /path/to/FlowCommit          # in your app's folder, or: npx /path/to/FlowCommit ~/my-app
+```
+
+It opens in your browser on the first free port from 4318 (`--port` picks one, `--no-open`
+skips the browser). `npm link` in this folder makes it a plain `flowcommit` command. It isn't
+published to npm yet.
+
+Inside the app, click the project name at the top left to **open another folder**, pick one
+of your **recent projects**, or start a **new project** (a new folder with Git turned on).
+FlowCommit only answers requests from this computer, from pages on this computer.
+
+### Working on FlowCommit itself
+
 ```sh
 npm install
 npm run dev
 ```
 
-Then open http://localhost:5317. Run the tests with `npm test`.
+Then open http://localhost:5317. Run the tests with `npm test` (shared logic) and
+`npm run test:e2e` (the editor, driven in your installed Chrome).
 
-By default FlowCommit edits a `demo-project/` folder inside this repo. To design a real
+By default the dev server edits a `demo-project/` folder inside this repo. To design a real
 project, point it at that project's folder:
 
 ```sh
@@ -35,12 +54,13 @@ Everything lives inside your project, next to your code:
 ```
 your-app/
   .flowcommit/
-    flow.json      the flowchart: steps, arrows, instructions
+    flow.json      the flowchart: steps, arrows, groups, instructions
     assets/        images and videos attached to steps
 ```
 
 `flow.json` is plain, sorted JSON so Git diffs stay small and readable. The format is
-defined in `packages/shared/src/index.ts`.
+defined in `packages/shared/src/index.ts`. The only thing kept outside your project is the
+list of recent projects, in `~/.flowcommit/recent.json`.
 
 ## AI help, using the AI tools you already have
 
@@ -155,14 +175,26 @@ changing them marks a built step as *changed since built*.
 - Each step type has its own shape: pills for Start and End, a diamond for decisions, a
   browser window for screens, a box with side bars for APIs, and a cylinder for data.
   Decisions can send arrows from their left, right or bottom corner.
-- Add **tags** to steps (like `auth` or `MVP`) to group them.
+- Add **tags** to steps (like `auth` or `MVP`) to label them.
+- **Group** steps into named parts of the app, like "Checkout": select them and press **⌘G**.
+  A group is a frame you can drag by its title; fold it into one card to make a big flow
+  readable, and click the card to open it again. Folding only changes your view.
 - Use **View** at the top to choose what cards show. **Simple** shows only shapes and titles,
   which is the clearest way to explain the app to someone; turn on the **shape legend** too.
 
 - Click the **+** under a step, or press **Tab**, to add the next connected step.
 - Drag a step type from the toolbar at the bottom, or click it.
 - Use **Tidy up** (next to the zoom buttons) to rearrange a messy flow top to bottom.
-- Start from a template: sign-up and log-in, online store checkout, or habit tracker.
+- Start from a template: sign-up and log-in, online store checkout, habit tracker, AI chat
+  assistant, booking with a deposit, or team workspace.
+- Already have code? A folder with code offers **Draw it from my code**: Claude Code or Codex
+  reads the project (without changing it) and draws the flow it finds. Steps the code
+  already does are marked built and linked to their files.
+- **⌘Z / ⌘⇧Z** undo and redo on the canvas, **⌘C / ⌘V** copy and paste steps (even between
+  projects), **⌘D** duplicates and **⌘F** finds a step.
+- **View → Share a picture** downloads a PNG of the flow, or prints it so you can save a PDF.
+- A built step lists its code files; click one to open it in VS Code, Cursor, Windsurf, Zed,
+  a JetBrains IDE or your default app.
 
 ## Versions
 
@@ -174,9 +206,15 @@ before it, colored on the canvas: green for added, red for removed, yellow for c
 Click a step to see exactly which words, images and links changed. You can restore any
 version, and it becomes your draft until you save again.
 
-Versions are ordinary Git commits that only touch `.flowcommit/`, so they sit alongside
-your code history and never include other files you have staged. If the folder isn't a
-Git repository yet, FlowCommit offers to turn version history on.
+Versions are ordinary Git commits, so they sit alongside your code history. When the code
+changed too, the save dialog offers **Include my code changes**: that version then holds the
+design and the code that builds it. Otherwise a version only touches `.flowcommit/` and never
+includes other files you have staged. If the folder isn't a Git repository yet, FlowCommit
+offers to turn version history on.
+
+In History, **Restore this design** brings back only the drawing. **Open as a branch** starts
+a new branch at that version, so the design and the code both go back to it, and your current
+branch stays as it was.
 
 ## Code layout
 
@@ -185,6 +223,8 @@ Git repository yet, FlowCommit offers to turn version history on.
 | `packages/shared` | The flow file format and the diff between two versions, shared by everything else |
 | `packages/server` | Local server that reads and writes your project's `.flowcommit` folder |
 | `packages/web` | The flowchart editor (React + React Flow) |
+| `bin`, `scripts` | The `flowcommit` command and the build that bundles everything for it |
+| `e2e` | Editor tests (Playwright) |
 
 ## Roadmap
 
