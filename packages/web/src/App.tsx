@@ -64,6 +64,9 @@ import { SyncContext, useSync } from "./sync.tsx";
 import { SyncPanel } from "./components/SyncPanel.tsx";
 import { BuildDialog } from "./components/BuildDialog.tsx";
 import { arrange } from "./arrange.ts";
+import { useUndo } from "./undo.ts";
+import { copyPayload, instantiate, parsePayload } from "./clipboard.ts";
+import { SearchBox } from "./components/SearchBox.tsx";
 import { Legend, ViewMenu, useViewOptions } from "./components/ViewMenu.tsx";
 
 const nodeTypes = { step: StepCard };
@@ -159,6 +162,8 @@ export function App() {
 
   // Only the newest load may update the canvas (React runs effects twice in development).
   const loadRun = useRef(0);
+  // Set once the undo history exists below; loading a different flow starts a fresh history.
+  const resetUndo = useRef<() => void>(() => {});
   // React Flow hands back a new helper object once the canvas mounts. Reading it through a ref
   // keeps loadFlow stable, so the flow loads once instead of again after mounting.
   const rfRef = useRef(rf);
@@ -170,8 +175,15 @@ export function App() {
     try {
       const flow = await api.loadFlow();
       if (run !== loadRun.current) return;
+      const text = serializeFlow(flow);
+      // Nothing new on disk: keep the canvas and its undo history as they are.
+      if (opts.keepView && latest.current?.text === text) {
+        savedText.current = text;
+        setLoad({ status: "ready" });
+        return;
+      }
       const canvas = toCanvas(flow);
-      savedText.current = serializeFlow(flow);
+      savedText.current = text;
       setMeta(canvas.meta);
       // Keep the sizes React Flow already measured. A card whose size doesn't change is never
       // measured again, and without sizes React Flow quietly stops fitting the view.
@@ -181,6 +193,7 @@ export function App() {
       });
       setEdges(canvas.edges);
       setLoad({ status: "ready" });
+      resetUndo.current();
       if (!opts.keepView) setTimeout(() => void rfRef.current.fitView(fitRef.current), 60);
     } catch (err) {
       if (run !== loadRun.current) return;
@@ -602,11 +615,91 @@ export function App() {
               to: titleOf(selectedEdges[0].target),
             };
 
+  const undo = useUndo({ meta, nodes, edges }, load.status === "ready", (snapshot) => {
+    setMeta(snapshot.meta);
+    setNodes((prev) => {
+      const measured = new Map(prev.map((n) => [n.id, n.measured]));
+      return snapshot.nodes.map((n) => ({ ...n, measured: measured.get(n.id) }));
+    });
+    setEdges(snapshot.edges);
+  });
+  resetUndo.current = undo.reset;
+
+  // ----- Copy, cut, paste, duplicate and search -----
+
+  const pasteCount = useRef(0);
+  const insertCopies = useCallback(
+    (payload: NonNullable<ReturnType<typeof parsePayload>>, verb = "Pasted") => {
+      pasteCount.current += 1;
+      const copies = instantiate(payload, 40 * pasteCount.current);
+      setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), ...copies.nodes]);
+      setEdges((es) => [...es.map((e) => ({ ...e, selected: false })), ...copies.edges]);
+      notify(`${verb} ${copies.nodes.length} ${copies.nodes.length === 1 ? "step" : "steps"}`);
+    },
+    [setNodes, setEdges, notify],
+  );
+
+  useEffect(() => {
+    if (mode !== "edit") return;
+    const selected = () => nodes.filter((n) => n.selected);
+    const onCopy = (e: ClipboardEvent) => {
+      if (isTyping(e.target) || !selected().length) return;
+      e.preventDefault();
+      e.clipboardData?.setData("text/plain", copyPayload(selected(), edges));
+      pasteCount.current = 0;
+      if (e.type === "cut") void rf.deleteElements({ nodes: selected().map((n) => ({ id: n.id })) });
+      notify(`${e.type === "cut" ? "Cut" : "Copied"} ${selected().length} ${selected().length === 1 ? "step" : "steps"}`);
+    };
+    const onPaste = (e: ClipboardEvent) => {
+      if (isTyping(e.target)) return;
+      const payload = parsePayload(e.clipboardData?.getData("text/plain") ?? "");
+      if (!payload) return;
+      e.preventDefault();
+      insertCopies(payload);
+    };
+    document.addEventListener("copy", onCopy);
+    document.addEventListener("cut", onCopy);
+    document.addEventListener("paste", onPaste);
+    return () => {
+      document.removeEventListener("copy", onCopy);
+      document.removeEventListener("cut", onCopy);
+      document.removeEventListener("paste", onPaste);
+    };
+  }, [mode, nodes, edges, rf, insertCopies, notify]);
+
+  const duplicateSelection = () => {
+    const sel = nodes.filter((n) => n.selected);
+    if (!sel.length) return;
+    pasteCount.current = 0;
+    insertCopies(parsePayload(copyPayload(sel, edges))!, "Duplicated");
+  };
+
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchMatches, setSearchMatches] = useState<Set<string> | null>(null);
+
   // Keyboard: ⌘S saves a version, Tab adds the next step after the selected one.
   const selectedId = selectedNodes.length === 1 ? selectedNodes[0].id : null;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+      const key = e.key.toLowerCase();
+      // In a text box, ⌘Z undoes typing as usual; on the canvas it undoes design changes.
+      if ((e.metaKey || e.ctrlKey) && (key === "z" || key === "y") && mode === "edit" && !isTyping(e.target)) {
+        e.preventDefault();
+        if (key === "y" || e.shiftKey) undo.redo();
+        else undo.undo();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && key === "d" && mode === "edit" && !isTyping(e.target)) {
+        e.preventDefault();
+        duplicateSelection();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && key === "f" && mode === "edit") {
+        e.preventDefault();
+        setSearchOpen(true);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && key === "s") {
         e.preventDefault();
         if (draftDiff) setSaveDialog(true);
         return;
@@ -618,7 +711,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [draftDiff, mode, selectedId, addAfter]);
+  }, [draftDiff, mode, selectedId, addAfter, undo, duplicateSelection]);
 
   // ----- Reading aids: numbers, highlighted paths, arrow styles and the walkthrough -----
 
@@ -631,9 +724,15 @@ export function App() {
       const out = edges.filter((e) => e.source === tour.current);
       return { nodes: new Set([tour.current, ...out.map((e) => e.target)]), edges: new Set(out.map((e) => e.id)) };
     }
+    if (searchMatches) {
+      return {
+        nodes: searchMatches,
+        edges: new Set(edges.filter((e) => searchMatches.has(e.source) && searchMatches.has(e.target)).map((e) => e.id)),
+      };
+    }
     const id = view.options.focus ? (hoveredId ?? selectedId) : null;
     return id ? related(id, nodes, edges) : null;
-  }, [tour, hoveredId, selectedId, view.options.focus, nodes, edges]);
+  }, [tour, searchMatches, hoveredId, selectedId, view.options.focus, nodes, edges]);
 
   const shownEdges = useMemo(() => {
     const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -865,6 +964,12 @@ export function App() {
                     bgColor="transparent"
                   />
                   <Controls showInteractive={false} position="bottom-left">
+                    <ControlButton onClick={undo.undo} disabled={!undo.canUndo} title="Undo (⌘Z)" aria-label="Undo">
+                      <Icon name="undo" size={14} />
+                    </ControlButton>
+                    <ControlButton onClick={undo.redo} disabled={!undo.canRedo} title="Redo (⌘⇧Z)" aria-label="Redo">
+                      <Icon name="redo" size={14} />
+                    </ControlButton>
                     <ControlButton onClick={tidyUp} title="Tidy up the layout" aria-label="Tidy up the layout">
                       <Icon name="tidy" size={14} />
                     </ControlButton>
@@ -880,6 +985,15 @@ export function App() {
             </main>
 
             {view.options.legend && !showWelcome && <Legend />}
+            {searchOpen && !showWelcome && (
+              <SearchBox
+                nodes={nodes}
+                numbers={numbers}
+                onMatches={setSearchMatches}
+                onPick={(id) => selectStep(id)}
+                onClose={() => setSearchOpen(false)}
+              />
+            )}
             {view.options.outline && !showWelcome && (
               <Outline
                 nodes={nodes}

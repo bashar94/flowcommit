@@ -28,8 +28,9 @@ export class Project {
   readonly assetsDir: string;
   readonly statusPath: string;
   readonly suggestionsPath: string;
-  /** The last flow text this process wrote, so a file watcher can ignore our own saves. */
-  lastWrittenFlow = "";
+  /** The flow texts this process wrote last, so a file watcher can ignore our own saves. */
+  private recentWrites: string[] = [];
+  private writeCount = 0;
 
   constructor(root: string) {
     this.root = path.resolve(root);
@@ -67,11 +68,16 @@ export class Project {
   async writeFlow(flow: FlowFile): Promise<void> {
     await mkdir(path.dirname(this.flowPath), { recursive: true });
     // Write to a temp file first so a crash never leaves a half-written flow behind.
-    const tmp = `${this.flowPath}.${process.pid}.tmp`;
+    const tmp = `${this.flowPath}.${process.pid}-${++this.writeCount}.tmp`;
     const text = serializeFlow(flow);
-    this.lastWrittenFlow = text;
+    this.recentWrites = [...this.recentWrites.slice(-7), text];
     await writeFile(tmp, text, "utf8");
     await rename(tmp, this.flowPath);
+  }
+
+  /** True when the flow on disk is one this process saved, not an edit from somewhere else. */
+  wroteFlow(text: string): boolean {
+    return this.recentWrites.includes(text);
   }
 
   async readStatus(): Promise<BuildStatus> {

@@ -116,6 +116,14 @@ function FlowDetails({
           <dd>Ask AI while typing in a text box</dd>
           <dt>⌘S</dt>
           <dd>Save a version</dd>
+          <dt>⌘Z</dt>
+          <dd>Undo (⌘⇧Z to redo)</dd>
+          <dt>⌘C ⌘V</dt>
+          <dd>Copy and paste steps, even between projects</dd>
+          <dt>⌘D</dt>
+          <dd>Duplicate what's selected</dd>
+          <dt>⌘F</dt>
+          <dd>Find a step</dd>
           <dt>Delete</dt>
           <dd>Remove what's selected</dd>
         </dl>

@@ -347,7 +347,7 @@ watch(path.join(project.root, FLOW_DIR), (_event, file) => {
         send("suggestions", await project.readSuggestions());
       } else {
         const text = await readFile(project.flowPath, "utf8").catch(() => "");
-        if (text && text !== project.lastWrittenFlow) send("flow", { changed: true });
+        if (text && !project.wroteFlow(text)) send("flow", { changed: true });
       }
     }, 80),
   );

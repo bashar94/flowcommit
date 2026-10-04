@@ -1,7 +1,7 @@
 import type { NodeKind } from "@flowcommit/shared";
 
 /** Small line icons drawn on a 20×20 grid with the current text color. */
-const paths: Record<NodeKind | "sparkle" | "plus" | "close" | "check" | "chevron" | "image" | "link" | "undo" | "tidy" | "alert" | "copy" | "hammer" | "eye" | "tag" | "arrowRight" | "pin" | "pen" | "markup" | "branch" | "cloud" | "upload" | "download" | "github" | "sync", string> = {
+const paths: Record<NodeKind | "sparkle" | "plus" | "close" | "check" | "chevron" | "image" | "link" | "undo" | "tidy" | "alert" | "copy" | "hammer" | "eye" | "tag" | "arrowRight" | "pin" | "pen" | "markup" | "branch" | "cloud" | "upload" | "download" | "github" | "sync" | "redo" | "search", string> = {
   start: "M6.5 4.8v10.4L15 10z",
   step: "M4 6.5h12M4 10h12M4 13.5h7",
   decision: "M10 2.8 17.2 10 10 17.2 2.8 10z",
@@ -17,6 +17,8 @@ const paths: Record<NodeKind | "sparkle" | "plus" | "close" | "check" | "chevron
   image: "M3 4.5h14v11H3zM3 13l4-4 3 3 2-2 5 4.5M12.5 8.2a1.2 1.2 0 1 0 0-.1",
   link: "M8.5 11.5a3 3 0 0 0 4.2 0l2.6-2.6a3 3 0 0 0-4.2-4.2l-1 1M11.5 8.5a3 3 0 0 0-4.2 0l-2.6 2.6a3 3 0 0 0 4.2 4.2l1-1",
   undo: "M7 5 3.5 8.5 7 12M4 8.5h7.5a4.5 4.5 0 0 1 0 9H9",
+  redo: "M13 5l3.5 3.5L13 12M16 8.5H8.5a4.5 4.5 0 0 0 0 9H11",
+  search: "M8.8 14.6a5.8 5.8 0 1 0 0-11.6 5.8 5.8 0 0 0 0 11.6zM13 13l4 4",
   tidy: "M7 3h6v4H7zM3 13h6v4H3zM11 13h6v4h-6zM10 7v3M6 13v-3h8v3",
   alert: "M10 3 18 17H2zM10 8.5v3.5M10 14.6v.1",
   copy: "M7 7h9v10H7zM4 13V3h9",
