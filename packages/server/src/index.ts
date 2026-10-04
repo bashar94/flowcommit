@@ -50,6 +50,32 @@ if (project.root === demoRoot && !existsSync(path.join(demoRoot, ".git"))) {
 }
 
 const app = express();
+
+/**
+ * FlowCommit only answers requests meant for this computer, from pages on this computer.
+ * - The Host check stops DNS rebinding, where a website points its own domain at 127.0.0.1
+ *   to reach local servers.
+ * - The Origin check stops other websites from sending requests from a visitor's browser.
+ */
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+app.use((req, res, next) => {
+  const host = (req.headers.host ?? "").replace(/:\d+$/, "");
+  let local = LOCAL_HOSTS.has(host);
+  const origin = req.headers.origin;
+  if (local && origin) {
+    try {
+      local = LOCAL_HOSTS.has(new URL(origin).hostname);
+    } catch {
+      local = false;
+    }
+  }
+  if (!local) {
+    res.status(403).json({ error: "FlowCommit only answers requests from this computer." });
+    return;
+  }
+  next();
+});
+
 app.use(express.json({ limit: "5mb" }));
 
 app.get("/api/project", (_req, res) => {
