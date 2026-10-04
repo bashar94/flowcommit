@@ -4566,3 +4566,53 @@ button.change-row:hover {
   padding-top: 10px;
   border-top: 1px solid var(--line);
 }
+
+/* ---------- First-run tips ---------- */
+
+.tip-highlight {
+  position: fixed;
+  z-index: 60;
+  border-radius: 14px;
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 9999px rgb(15 20 22 / 0.35);
+  pointer-events: none;
+  transition: all 260ms var(--ease-out);
+}
+
+.tip-card {
+  position: fixed;
+  z-index: 61;
+  width: 320px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+  animation: pop-in 180ms var(--ease-out);
+}
+
+.tip-count {
+  margin: 0 0 4px;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.tip-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.tip-text {
+  margin: 0 0 14px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip-highlight,
+  .tip-card {
+    transition: none;
+    animation: none;
+  }
+}

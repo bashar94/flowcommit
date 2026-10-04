@@ -59,6 +59,7 @@ import { commitLabel, shortSha, type Side } from "./compare.ts";
 import { SaveVersionDialog } from "./components/SaveVersionDialog.tsx";
 import { Welcome } from "./components/Welcome.tsx";
 import { ProjectMenu } from "./components/ProjectMenu.tsx";
+import { FirstRunTips, tipsSeen } from "./components/FirstRunTips.tsx";
 import { GroupActionsContext, GroupCard, GroupFrames, type GroupActions } from "./components/Groups.tsx";
 import { foldGroups, isGroupCard, newGroupId, type CanvasNode } from "./groups.ts";
 import { download, fileName, flowPicture, printPicture } from "./exportImage.ts";
@@ -137,6 +138,7 @@ export function App() {
   const [review, setReview] = useState<Review | null>(null);
   const [buildDialog, setBuildDialog] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [tipsDone, setTipsDone] = useState(tipsSeen);
   const [focusTitleKey, setFocusTitleKey] = useState(0);
   const view = useViewOptions();
 
@@ -1056,6 +1058,7 @@ export function App() {
           <button
             type="button"
             className="build-button"
+            data-tip="build"
             data-active={activeBuild || undefined}
             disabled={load.status !== "ready"}
             onClick={() => {
@@ -1075,6 +1078,7 @@ export function App() {
           <button
             type="button"
             className="button-primary"
+            data-tip="save"
             disabled={!draftDiff}
             title={draftDiff ? "Save a version of your design (⌘S)" : "No changes since the last version"}
             onClick={() => setSaveDialog(true)}
@@ -1287,6 +1291,9 @@ export function App() {
         />
       )}
 
+      {!tipsDone && load.status === "ready" && mode === "edit" && !showWelcome && !tour && nodes.length > 1 && (
+        <FirstRunTips onDone={() => setTipsDone(true)} />
+      )}
       {saveDialog && draftDiff && (
         <SaveVersionDialog
           state={history.state}
