@@ -22,9 +22,11 @@
     "typecheck": "tsc -p packages/shared && tsc -p packages/server && tsc -p packages/web",
     "test": "npm test --workspaces --if-present",
     "build": "node scripts/build.mjs",
-    "start": "node bin/flowcommit.mjs"
+    "start": "node bin/flowcommit.mjs",
+    "test:e2e": "npm run build && playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "concurrently": "^10.0.5",
     "esbuild": "^0.28.2",
     "typescript": "^7.0.2"
