@@ -1,0 +1,26 @@
+{
+  "name": "@flowcommit/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "tsx --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@flowcommit/shared": "*",
+    "@xyflow/react": "^12.12.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.2",
+    "tsx": "^4.23.15",
+    "@types/node": "^26.6.4"
+  }
+}

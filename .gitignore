@@ -1,0 +1,5 @@
+node_modules/
+dist/
+demo-project/
+.DS_Store
+*.log

@@ -1,0 +1,16 @@
+{
+  "name": "flowcommit",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,magenta \"npm run dev -w @flowcommit/server\" \"npm run dev -w @flowcommit/web\"",
+    "typecheck": "tsc -p packages/shared && tsc -p packages/server && tsc -p packages/web",
+    "test": "npm test --workspaces --if-present",
+    "build": "npm run build -w @flowcommit/web"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "typescript": "^7.0.2"
+  }
+}
