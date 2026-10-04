@@ -65,6 +65,8 @@ export const FlowNodeSchema = z.object({
   attachments: z.array(AttachmentSchema).default([]),
   /** Short labels people add to group steps, like "auth" or "MVP". */
   tags: z.array(z.string()).default([]),
+  /** The group (a named part of the flow, like "Checkout") this step belongs to, if any. */
+  group: z.string().optional(),
   position: z.object({ x: z.number(), y: z.number() }),
 });
 export type FlowNode = z.infer<typeof FlowNodeSchema>;
@@ -79,10 +81,21 @@ export const FlowEdgeSchema = z.object({
 });
 export type FlowEdge = z.infer<typeof FlowEdgeSchema>;
 
+/**
+ * A named part of the flow, like "Sign up" or "Checkout". It frames its steps on the canvas and
+ * can be folded into one card, so a big flow reads as a few parts.
+ */
+export const FlowGroupSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+});
+export type FlowGroup = z.infer<typeof FlowGroupSchema>;
+
 export const FlowFileSchema = z.object({
   schema: z.literal(SCHEMA_VERSION),
   name: z.string(),
   description: z.string().default(""),
+  groups: z.array(FlowGroupSchema).default([]),
   nodes: z.array(FlowNodeSchema),
   edges: z.array(FlowEdgeSchema),
 });
@@ -93,6 +106,7 @@ export function createEmptyFlow(name: string): FlowFile {
     schema: SCHEMA_VERSION,
     name,
     description: "",
+    groups: [],
     nodes: [
       {
         id: "start",
@@ -114,10 +128,12 @@ export function createEmptyFlow(name: string): FlowFile {
  */
 export function serializeFlow(flow: FlowFile): string {
   const byId = <T extends { id: string }>(a: T, b: T) => a.id.localeCompare(b.id);
-  const ordered: FlowFile = {
+  const ordered: Omit<FlowFile, "groups"> & { groups?: FlowGroup[] } = {
     schema: flow.schema,
     name: flow.name,
     description: flow.description,
+    // Left out when empty, so flows without groups look the same as before groups existed.
+    ...(flow.groups.length ? { groups: [...flow.groups].sort(byId).map((g) => ({ id: g.id, title: g.title })) } : {}),
     nodes: [...flow.nodes].sort(byId).map((n) => ({
       id: n.id,
       kind: n.kind,
@@ -125,6 +141,7 @@ export function serializeFlow(flow: FlowFile): string {
       instructions: n.instructions,
       attachments: n.attachments.map(serializeAttachment),
       tags: n.tags,
+      ...(n.group ? { group: n.group } : {}),
       position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
     })),
     edges: [...flow.edges].sort(byId).map((e) => ({
@@ -163,6 +180,11 @@ export function parseFlow(input: unknown): FlowFile {
   const flow = FlowFileSchema.parse(input);
   const ids = new Set(flow.nodes.map((n) => n.id));
   if (ids.size !== flow.nodes.length) throw new Error("Two steps share the same id.");
+  // A step in a group that no longer exists is simply ungrouped, and empty groups are dropped.
+  const groupIds = new Set(flow.groups.map((g) => g.id));
+  for (const n of flow.nodes) if (n.group && !groupIds.has(n.group)) delete n.group;
+  const used = new Set(flow.nodes.map((n) => n.group).filter(Boolean));
+  flow.groups = flow.groups.filter((g) => used.has(g.id));
   for (const e of flow.edges) {
     if (!ids.has(e.source) || !ids.has(e.target)) {
       throw new Error(`Arrow ${e.id} points at a step that doesn't exist.`);

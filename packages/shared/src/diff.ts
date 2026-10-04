@@ -28,7 +28,12 @@ export type DiffStats = {
 };
 
 export type FlowDiff = {
-  meta: { name?: { before: string; after: string }; description?: { before: string; after: string } };
+  meta: {
+    name?: { before: string; after: string };
+    description?: { before: string; after: string };
+    /** Each group as "Title: step, step", so renaming a group or moving steps between groups shows up. */
+    groups?: { before: string[]; after: string[] };
+  };
   nodes: NodeDiff[];
   edges: EdgeDiff[];
   stats: DiffStats;
@@ -95,6 +100,10 @@ export function diffFlows(before: FlowFile | null, after: FlowFile): FlowDiff {
     meta.description = { before: before?.description ?? "", after: after.description };
   }
 
+  const before_ = groupSummary(before);
+  const after_ = groupSummary(after);
+  if (before_.join("\n") !== after_.join("\n")) meta.groups = { before: before_, after: after_ };
+
   const count = <T extends { status: string }>(list: T[], status: string) =>
     list.filter((x) => x.status === status).length;
   const stats: DiffStats = {
@@ -109,6 +118,16 @@ export function diffFlows(before: FlowFile | null, after: FlowFile): FlowDiff {
   };
 
   return { meta, nodes, edges, stats };
+}
+
+function groupSummary(flow: FlowFile | null): string[] {
+  if (!flow) return [];
+  return [...(flow.groups ?? [])]
+    .map((g) => {
+      const steps = flow.nodes.filter((n) => n.group === g.id).map((n) => n.title || "Untitled step").sort();
+      return `${g.title || "Untitled group"}: ${steps.join(", ")}`;
+    })
+    .sort();
 }
 
 /** True when the diff has design changes. Moving cards around alone doesn't count. */

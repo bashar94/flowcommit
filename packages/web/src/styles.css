@@ -780,6 +780,7 @@ textarea:focus {
 .minimap-node.kind-api { --kind: var(--k-api); }
 .minimap-node.kind-data { --kind: var(--k-data); }
 .minimap-node.kind-end { --kind: var(--k-end); }
+.minimap-node.kind-group { --kind: var(--accent); }
 
 /* ---------- Dock ---------- */
 
@@ -4373,4 +4374,147 @@ button.change-row:hover {
 
 .confirm input {
   margin: 8px 0;
+}
+
+/* ---------- Groups ---------- */
+
+/* Frames sit behind the cards and arrows; only their title bar takes clicks. */
+.react-flow__viewport-portal {
+  position: absolute;
+  z-index: -1;
+}
+
+.group-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--line-strong));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  pointer-events: none;
+}
+
+.group-frame-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 6px 0 14px;
+  pointer-events: auto;
+  cursor: grab;
+  user-select: none;
+}
+
+.group-frame-header:active {
+  cursor: grabbing;
+}
+
+.group-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.group-title-input {
+  width: 220px;
+  padding: 3px 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.group-frame-actions {
+  display: flex;
+  margin-left: auto;
+  opacity: 0.55;
+  transition: opacity 160ms;
+}
+
+.group-frame-header:hover .group-frame-actions,
+.group-frame-actions:focus-within {
+  opacity: 1;
+}
+
+.group-frame-actions .icon-button {
+  width: 26px;
+  height: 26px;
+}
+
+.group-frame-actions .icon-button:first-child .icon {
+  transform: rotate(180deg);
+}
+
+/* A folded group: a card with a stack behind it, so it reads as several steps in one. */
+.group-card {
+  position: relative;
+  width: 248px;
+}
+
+.group-card-body {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-radius: var(--r-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-1), 6px 6px 0 -1px var(--surface-2), 6px 6px 0 0 var(--line-strong);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.group-card-body:hover {
+  box-shadow: var(--shadow-2), 6px 6px 0 -1px var(--surface-2), 6px 6px 0 0 var(--line-strong);
+}
+
+.group-card-title {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.group-card-meta {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+
+.group-card-kinds {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.group-card-kinds i {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--kind) 14%, transparent);
+  color: var(--kind);
+}
+
+.group-card-open {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.inspector kbd {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 11px;
 }

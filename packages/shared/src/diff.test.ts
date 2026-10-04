@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createEmptyFlow, type FlowFile, type FlowNode } from "./flow.ts";
+import { createEmptyFlow, parseFlow, serializeFlow, type FlowFile, type FlowNode } from "./flow.ts";
 import { diffFlows, diffWords, hasDesignChanges, suggestMessage, summarizeDiff } from "./diff.ts";
 
 const step = (id: string, patch: Partial<FlowNode> = {}): FlowNode => ({
@@ -103,4 +103,32 @@ test("suggested messages list steps from top to bottom", () => {
 test("adding a tag is a change to the step", () => {
   const d = diffFlows(flow([step("a")]), flow([step("a", { tags: ["auth"] })]));
   assert.deepEqual(d.nodes[0].status === "changed" && d.nodes[0].fields, ["tags"]);
+});
+
+test("grouping steps and renaming groups count as design changes", () => {
+  const base = parseFlow({
+    schema: 1,
+    name: "App",
+    nodes: [
+      { id: "a", kind: "start", title: "Open", position: { x: 0, y: 0 } },
+      { id: "b", kind: "step", title: "Pay", position: { x: 0, y: 200 } },
+    ],
+    edges: [],
+  });
+  // Flows without groups are saved exactly as before groups existed.
+  assert.ok(!serializeFlow(base).includes("groups"));
+
+  const grouped = parseFlow({
+    ...base,
+    groups: [{ id: "g", title: "Checkout" }, { id: "empty", title: "Nothing in here" }],
+    nodes: base.nodes.map((n) => (n.id === "b" ? { ...n, group: "g" } : n)),
+  });
+  assert.deepEqual(grouped.groups.map((g) => g.id), ["g"], "empty groups are dropped");
+  const diff = diffFlows(base, grouped);
+  assert.deepEqual(diff.meta.groups, { before: [], after: ["Checkout: Pay"] });
+  assert.equal(diff.stats.detailsChanged, 1);
+  assert.equal(diff.stats.stepsChanged, 0);
+
+  const renamed = { ...grouped, groups: [{ id: "g", title: "Paying" }] };
+  assert.deepEqual(diffFlows(grouped, renamed).meta.groups?.after, ["Paying: Pay"]);
 });

@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type ClipboardEvent } from "react";
-import { NODE_KINDS, NODE_KIND_INFO, type Attachment, type WriteRequest } from "@flowcommit/shared";
+import { NODE_KINDS, NODE_KIND_INFO, type Attachment, type FlowGroup, type WriteRequest } from "@flowcommit/shared";
 import { api } from "../api.ts";
 import { assetUrl, newId, type ArrowEdge, type FlowMeta, type StepData, type StepNode } from "../model.ts";
 import { Icon } from "../icons.tsx";
@@ -14,7 +14,7 @@ export type Selection =
   | { type: "none" }
   | { type: "node"; node: StepNode; previous: string[]; next: string[]; build?: StepBuildInfo }
   | { type: "edge"; edge: ArrowEdge; from: string; to: string }
-  | { type: "many"; count: number };
+  | { type: "many"; count: number; steps: number };
 
 type Props = {
   selection: Selection;
@@ -31,6 +31,7 @@ type Props = {
   onDeleteEdge: (id: string) => void;
   onAddAfter: (id: string) => void;
   onResetBuild: (id: string) => void;
+  onGroup: () => void;
 };
 
 export function Inspector(props: Props) {
@@ -50,6 +51,7 @@ export function Inspector(props: Props) {
           build={selection.build}
           onResetBuild={() => props.onResetBuild(selection.node.id)}
           allTags={props.allTags}
+          groups={meta.groups}
         />
       )}
       {selection.type === "edge" && (
@@ -66,6 +68,17 @@ export function Inspector(props: Props) {
         <div className="inspector-section">
           <h2 className="inspector-title">{selection.count} items selected</h2>
           <p className="inspector-note">Drag to move them together, or press Delete to remove them.</p>
+          {selection.steps > 0 && (
+            <>
+              <p className="inspector-note">
+                Group them to name this part of the flow, like "Checkout". A group can be folded into one card, so a big
+                flow is easier to read.
+              </p>
+              <button type="button" className="button" onClick={props.onGroup}>
+                Group {selection.steps === 1 ? "this step" : `these ${selection.steps} steps`} <kbd>⌘G</kbd>
+              </button>
+            </>
+          )}
         </div>
       )}
       {selection.type === "none" && (
@@ -124,6 +137,8 @@ function FlowDetails({
           <dd>Duplicate what's selected</dd>
           <dt>⌘F</dt>
           <dd>Find a step</dd>
+          <dt>⌘G</dt>
+          <dd>Group what's selected into a part of the flow</dd>
           <dt>Delete</dt>
           <dd>Remove what's selected</dd>
         </dl>
@@ -142,8 +157,10 @@ function NodeDetails({
   build,
   onResetBuild,
   allTags,
+  groups,
 }: {
   allTags: string[];
+  groups: FlowGroup[];
   build?: StepBuildInfo;
   onResetBuild: () => void;
   node: StepNode;
@@ -254,6 +271,19 @@ function NodeDetails({
           onChange={(title) => onChange({ title })}
         />
         <TagInput tags={data.tags} suggestions={allTags} onChange={(tags) => onChange({ tags })} />
+        {groups.length > 0 && (
+          <label className="field">
+            <span>Group</span>
+            <select value={data.group ?? ""} onChange={(e) => onChange({ group: e.target.value || undefined })}>
+              <option value="">Not in a group</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.title || "Untitled group"}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <AiField
           field="instructions"
           label="Instructions for the AI builder"

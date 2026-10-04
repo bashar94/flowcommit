@@ -73,6 +73,10 @@ const VIEW_LABEL = {
 } as const;
 
 const text = (t: string) => ({ type: "text" as const, text: t });
+const groupNote = (flow: FlowFile, id?: string) => {
+  const g = id && flow.groups.find((x) => x.id === id);
+  return g ? ` (in "${g.title}")` : "";
+};
 const fail = (message: string) => ({ content: [text(message)], isError: true });
 
 async function load(): Promise<{ flow: FlowFile; status: BuildStatus }> {
@@ -204,10 +208,20 @@ server.registerTool(
       "",
       `Build progress: ${progress.built} of ${progress.total} steps built.`,
       "",
+      ...(flow.groups.length
+        ? [
+            "## Parts of the app",
+            "The person grouped steps into these parts. Keep each part's code together where it makes sense.",
+            ...flow.groups.map(
+              (g) => `- ${g.title || "Untitled group"}: ${flow.nodes.filter((n) => n.group === g.id).map((n) => n.title || "Untitled").join(", ")}`,
+            ),
+            "",
+          ]
+        : []),
       "## Steps, in reading order",
       ...plan.map(
         (p, i) =>
-          `${i + 1}. [${p.node.id}] ${NODE_KIND_INFO[p.node.kind].label}: ${p.node.title || "Untitled"}${p.node.tags.length ? ` #${p.node.tags.join(" #")}` : ""} — ${VIEW_LABEL[p.view]}`,
+          `${i + 1}. [${p.node.id}] ${NODE_KIND_INFO[p.node.kind].label}: ${p.node.title || "Untitled"}${groupNote(flow, p.node.group)}${p.node.tags.length ? ` #${p.node.tags.join(" #")}` : ""} — ${VIEW_LABEL[p.view]}`,
       ),
       "",
       "## Arrows",

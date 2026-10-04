@@ -12,6 +12,7 @@ import {
   useReactFlow,
   useUpdateNodeInternals,
   type Connection,
+  type OnNodesChange,
   type FitViewOptions,
   type IsValidConnection,
   type OnConnectEnd,
@@ -56,6 +57,8 @@ import { commitLabel, shortSha, type Side } from "./compare.ts";
 import { SaveVersionDialog } from "./components/SaveVersionDialog.tsx";
 import { Welcome } from "./components/Welcome.tsx";
 import { ProjectMenu } from "./components/ProjectMenu.tsx";
+import { GroupActionsContext, GroupCard, GroupFrames, type GroupActions } from "./components/Groups.tsx";
+import { foldGroups, isGroupCard, newGroupId, type CanvasNode } from "./groups.ts";
 import { AiPicker } from "./components/AiPicker.tsx";
 import { useToast } from "./components/Toasts.tsx";
 import { useAi } from "./ai.tsx";
@@ -71,12 +74,21 @@ import { copyPayload, instantiate, parsePayload } from "./clipboard.ts";
 import { SearchBox } from "./components/SearchBox.tsx";
 import { Legend, ViewMenu, useViewOptions } from "./components/ViewMenu.tsx";
 
-const nodeTypes = { step: StepCard };
+const nodeTypes = { step: StepCard, folded: GroupCard };
 const edgeTypes = { flow: FlowArrow };
 const ARROW_COLOR = { yes: "var(--add)", no: "var(--del)", back: "var(--arrow-back)", plain: "var(--arrow)" } as const;
 const SAVE_DELAY_MS = 600;
 const NEW_STEP_OFFSET = { x: LAYOUT.cardWidth / 2, y: 40 };
 /** Leaves room for the floating toolbar and side panel so no card hides behind them. */
+const FOLDED_KEY = "flowcommit.folded-groups";
+function readFolded(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(FOLDED_KEY) ?? "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
 const FIT_VIEW = {
   padding: { top: "48px", bottom: "120px", left: "48px", right: "420px" },
   maxZoom: 1,
@@ -108,7 +120,7 @@ export function App() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<StepNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ArrowEdge>([]);
-  const [meta, setMeta] = useState<FlowMeta>({ name: "", description: "" });
+  const [meta, setMeta] = useState<FlowMeta>({ name: "", description: "", groups: [] });
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
   const [save, setSave] = useState<SaveState>({ status: "saved" });
   const [mode, setMode] = useState<Mode>("edit");
@@ -365,6 +377,9 @@ export function App() {
 
   const selectStep = (id: string) => {
     setMode("edit");
+    // A step inside a folded group opens the group, so you can see it.
+    const group = nodes.find((n) => n.id === id)?.data.group;
+    if (group && folded.has(group)) groupActions.unfold(group);
     setNodes((ns) => ns.map((n) => ({ ...n, selected: n.id === id })));
     setEdges((es) => es.map((e) => ({ ...e, selected: false })));
     requestAnimationFrame(() => void rf.fitView({ nodes: [{ id }], ...fitRef.current, maxZoom: 1, duration: 300 }));
@@ -537,7 +552,7 @@ export function App() {
         })),
       );
       setEdges(arrows.map((a) => toCanvasEdge(newId("e"), a.source, a.target, a.label)));
-      setMeta((m) => ({ name: flow.name || m.name, description: description || m.description }));
+      setMeta((m) => ({ name: flow.name || m.name, description: description || m.description, groups: [] }));
       setWelcomeDismissed(true);
       arrangeWhenReady.current = true;
       notify(message, {
@@ -642,6 +657,57 @@ export function App() {
     [setNodes],
   );
 
+  // ----- Groups: named parts of the flow that can be folded into one card -----
+
+  // Folding is how you look at the flow, not part of the design, so it's kept in this browser only.
+  const [folded, setFolded] = useState<Set<string>>(() => readFolded());
+  const [editingGroup, setEditingGroup] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      localStorage.setItem(FOLDED_KEY, JSON.stringify([...folded]));
+    } catch {
+      // Private windows can refuse storage; folding still works until the page reloads.
+    }
+  }, [folded]);
+
+  const groupSelection = useCallback(() => {
+    const ids = new Set(nodes.filter((n) => n.selected).map((n) => n.id));
+    if (!ids.size) return;
+    const id = newGroupId();
+    setMeta((m) => ({ ...m, groups: [...m.groups, { id, title: "New group" }] }));
+    setNodes((ns) => ns.map((n) => (ids.has(n.id) ? { ...n, data: { ...n.data, group: id } } : n)));
+    setEditingGroup(id);
+  }, [nodes, setNodes]);
+
+  const groupActions = useMemo<GroupActions>(
+    () => ({
+      fold: (id) => {
+        // Hidden steps mustn't stay selected, or Delete would remove steps you can't see.
+        setNodes((ns) => ns.map((n) => (n.data.group === id && n.selected ? { ...n, selected: false } : n)));
+        setFolded((f) => new Set([...f, id]));
+      },
+      unfold: (id) => setFolded((f) => new Set([...f].filter((g) => g !== id))),
+      rename: (id, title) => setMeta((m) => ({ ...m, groups: m.groups.map((g) => (g.id === id ? { ...g, title } : g)) })),
+      ungroup: (id) => {
+        setNodes((ns) =>
+          ns.map((n) => {
+            if (n.data.group !== id) return n;
+            const { group: _group, ...data } = n.data;
+            return { ...n, data };
+          }),
+        );
+        setMeta((m) => ({ ...m, groups: m.groups.filter((g) => g.id !== id) }));
+        setFolded((f) => new Set([...f].filter((g) => g !== id)));
+      },
+      move: (id, dx, dy) =>
+        setNodes((ns) =>
+          ns.map((n) => (n.data.group === id ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n)),
+        ),
+      moved: () => {},
+    }),
+    [setNodes],
+  );
+
   const updateEdgeLabel = useCallback(
     (id: string, label: string) =>
       setEdges((es) => es.map((e) => (e.id === id ? { ...e, label: label || undefined, data: { label } } : e))),
@@ -656,7 +722,7 @@ export function App() {
     selectedCount === 0
       ? { type: "none" }
       : selectedCount > 1
-        ? { type: "many", count: selectedCount }
+        ? { type: "many", count: selectedCount, steps: selectedNodes.length }
         : selectedNodes.length === 1
           ? {
               type: "node",
@@ -751,6 +817,11 @@ export function App() {
         duplicateSelection();
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && key === "g" && mode === "edit" && !isTyping(e.target)) {
+        e.preventDefault();
+        groupSelection();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && key === "f" && mode === "edit") {
         e.preventDefault();
         setSearchOpen(true);
@@ -768,7 +839,7 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [draftDiff, mode, selectedId, addAfter, undo, duplicateSelection]);
+  }, [draftDiff, mode, selectedId, addAfter, undo, duplicateSelection, groupSelection]);
 
   // ----- Reading aids: numbers, highlighted paths, arrow styles and the walkthrough -----
 
@@ -813,6 +884,31 @@ export function App() {
       };
     });
   }, [edges, nodes, numbers, focus]);
+
+  // What the canvas draws: folded groups become single cards, and arrows go to those cards.
+  // The cards aren't part of the design, so their measured sizes are kept here instead.
+  const [cardSizes, setCardSizes] = useState<Map<string, { width: number; height: number }>>(new Map());
+  const canvas = useMemo(() => {
+    const view = foldGroups(nodes, shownEdges, meta.groups, folded, numbers);
+    return {
+      ...view,
+      nodes: view.nodes.map((n) => (n.type === "folded" && cardSizes.has(n.id) ? { ...n, measured: cardSizes.get(n.id) } : n)),
+    };
+  }, [nodes, shownEdges, meta.groups, folded, numbers, cardSizes]);
+  const onCanvasNodesChange = useCallback<OnNodesChange<CanvasNode>>(
+    (changes) => {
+      const sizes = changes.filter((c) => c.type === "dimensions" && isGroupCard(c.id) && c.dimensions);
+      if (sizes.length) {
+        setCardSizes((m) => {
+          const next = new Map(m);
+          for (const c of sizes) if (c.type === "dimensions" && c.dimensions) next.set(c.id, c.dimensions);
+          return next;
+        });
+      }
+      onNodesChange(changes.filter((c) => !("id" in c && isGroupCard(c.id))) as Parameters<typeof onNodesChange>[0]);
+    },
+    [onNodesChange],
+  );
 
   const startTour = () => {
     const first =
@@ -990,20 +1086,21 @@ export function App() {
                   </button>
                 </div>
               ) : (
-                <ReactFlow
+                <GroupActionsContext.Provider value={groupActions}>
+                <ReactFlow<CanvasNode, ArrowEdge>
                   fitView
                   fitViewOptions={fitRef.current}
-                  nodes={nodes}
-                  edges={shownEdges}
+                  nodes={canvas.nodes}
+                  edges={canvas.edges}
                   nodeTypes={nodeTypes}
                   edgeTypes={edgeTypes}
-                  onNodeMouseEnter={(_, n) => setHoveredId(n.id)}
+                  onNodeMouseEnter={(_, n) => !isGroupCard(n.id) && setHoveredId(n.id)}
                   onNodeMouseLeave={() => setHoveredId(null)}
-                  onNodesChange={onNodesChange}
+                  onNodesChange={onCanvasNodesChange}
                   onEdgesChange={onEdgesChange}
                   onConnect={onConnect}
                   onConnectEnd={onConnectEnd}
-                  onNodeDoubleClick={() => setFocusTitleKey((k) => k + 1)}
+                  onNodeDoubleClick={(_, n) => !isGroupCard(n.id) && setFocusTitleKey((k) => k + 1)}
                   isValidConnection={isValidConnection}
                   defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
                   deleteKeyCode={["Backspace", "Delete"]}
@@ -1034,9 +1131,17 @@ export function App() {
                     pannable
                     zoomable
                     position="bottom-left"
-                    nodeClassName={(n) => `minimap-node kind-${(n.data as StepData).kind}`}
+                    nodeClassName={(n) => (n.type === "folded" ? "minimap-node kind-group" : `minimap-node kind-${(n.data as StepData).kind}`)}
+                  />
+                  <GroupFrames
+                    groups={meta.groups}
+                    nodes={nodes}
+                    folded={folded}
+                    editing={editingGroup}
+                    onEditDone={() => setEditingGroup(null)}
                   />
                 </ReactFlow>
+                </GroupActionsContext.Provider>
               )}
             </main>
 
@@ -1126,6 +1231,7 @@ export function App() {
                   onDeleteEdge={(id) => void rf.deleteElements({ edges: [{ id }] })}
                   onAddAfter={addAfter}
                   onResetBuild={(id) => void build.reset(id)}
+                  onGroup={groupSelection}
                 />
                 )}
               </>

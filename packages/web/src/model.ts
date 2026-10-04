@@ -1,6 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import { MarkerType } from "@xyflow/react";
-import { SCHEMA_VERSION, type Attachment, type FlowFile, type NodeKind } from "@flowcommit/shared";
+import { SCHEMA_VERSION, type Attachment, type FlowFile, type FlowGroup, type NodeKind } from "@flowcommit/shared";
 
 export type DiffMark = "added" | "removed" | "changed" | "moved";
 
@@ -11,6 +11,8 @@ export type StepData = {
   instructions: string;
   attachments: Attachment[];
   tags: string[];
+  /** The id of the group this step is in, if any. */
+  group?: string;
   /** Only set when comparing versions. */
   diff?: DiffMark;
   /** Version whose files this step's attachments come from. Unset means the current draft. */
@@ -21,7 +23,7 @@ export type StepNode = Node<StepData, "step">;
 export type ArrowSide = "left" | "right";
 export type ArrowEdge = Edge<{ label: string }>;
 
-export type FlowMeta = { name: string; description: string };
+export type FlowMeta = { name: string; description: string; groups: FlowGroup[] };
 
 export const DEFAULT_EDGE_OPTIONS = {
   type: "smoothstep",
@@ -37,12 +39,19 @@ export function newId(prefix: string): string {
 
 export function toCanvas(flow: FlowFile): { meta: FlowMeta; nodes: StepNode[]; edges: ArrowEdge[] } {
   return {
-    meta: { name: flow.name, description: flow.description },
+    meta: { name: flow.name, description: flow.description, groups: flow.groups },
     nodes: flow.nodes.map((n) => ({
       id: n.id,
       type: "step",
       position: n.position,
-      data: { kind: n.kind, title: n.title, instructions: n.instructions, attachments: n.attachments, tags: n.tags },
+      data: {
+        kind: n.kind,
+        title: n.title,
+        instructions: n.instructions,
+        attachments: n.attachments,
+        tags: n.tags,
+        ...(n.group ? { group: n.group } : {}),
+      },
     })),
     edges: flow.edges.map((e) => toCanvasEdge(e.id, e.source, e.target, e.label, e.sourceHandle)),
   };
@@ -67,10 +76,14 @@ export function toCanvasEdge(
 }
 
 export function fromCanvas(meta: FlowMeta, nodes: StepNode[], edges: ArrowEdge[]): FlowFile {
+  // A group lasts as long as it has steps.
+  const groups = meta.groups.filter((g) => nodes.some((n) => n.data.group === g.id));
+  const groupIds = new Set(groups.map((g) => g.id));
   return {
     schema: SCHEMA_VERSION,
     name: meta.name,
     description: meta.description,
+    groups,
     nodes: nodes.map((n) => ({
       id: n.id,
       kind: n.data.kind,
@@ -78,6 +91,7 @@ export function fromCanvas(meta: FlowMeta, nodes: StepNode[], edges: ArrowEdge[]
       instructions: n.data.instructions,
       attachments: n.data.attachments,
       tags: n.data.tags,
+      ...(n.data.group && groupIds.has(n.data.group) ? { group: n.data.group } : {}),
       position: n.position,
     })),
     edges: edges.map((e) => ({

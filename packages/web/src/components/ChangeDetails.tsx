@@ -20,9 +20,11 @@ export function ChangeList({ diff, onFocus }: { diff: FlowDiff; onFocus: (id: st
   const steps = sortByPosition(diff.nodes.filter((n) => n.status !== "unchanged"));
   const moved = diff.nodes.filter((n) => n.status === "unchanged" && n.moved);
   const arrows = diff.edges.filter((e) => e.status !== "unchanged");
-  const { name, description } = diff.meta;
+  const { name, description, groups } = diff.meta;
+  const groupsBefore = new Set(groups?.before);
+  const groupsAfter = new Set(groups?.after);
 
-  if (!steps.length && !arrows.length && !name && !description && !moved.length) {
+  if (!steps.length && !arrows.length && !name && !description && !groups && !moved.length) {
     return <p className="inspector-note">These two versions are the same.</p>;
   }
 
@@ -60,6 +62,29 @@ export function ChangeList({ diff, onFocus }: { diff: FlowDiff; onFocus: (id: st
         <p className="inspector-note">
           {moved.length === 1 ? "1 step was" : `${moved.length} steps were`} moved on the canvas.
         </p>
+      )}
+      {groups && (
+        <section>
+          <h3>Groups</h3>
+          <ul>
+            {groups.after
+              .filter((g) => !groupsBefore.has(g))
+              .map((g) => (
+                <li key={`a:${g}`} className="change-row is-static" data-status="added">
+                  <span className="change-status">{STATUS_LABEL.added}</span>
+                  <span className="change-name">{g}</span>
+                </li>
+              ))}
+            {groups.before
+              .filter((g) => !groupsAfter.has(g))
+              .map((g) => (
+                <li key={`r:${g}`} className="change-row is-static" data-status="removed">
+                  <span className="change-status">{STATUS_LABEL.removed}</span>
+                  <span className="change-name">{g}</span>
+                </li>
+              ))}
+          </ul>
+        </section>
       )}
       {(name || description) && (
         <section>
