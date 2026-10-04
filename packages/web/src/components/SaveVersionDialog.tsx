@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { suggestMessage, summarizeDiff, type FlowDiff } from "@flowcommit/shared";
-import type { HistoryState } from "../api.ts";
+import { api, type HistoryState } from "../api.ts";
 
 type Props = {
   state: HistoryState;
   flowName: string;
   diff: FlowDiff;
   nextNumber: number;
-  onSave: (message: string) => Promise<void>;
+  onSave: (message: string, withCode: boolean) => Promise<void>;
   onClose: () => void;
 };
 
@@ -17,18 +17,22 @@ export function SaveVersionDialog({ state, flowName, diff, nextNumber, onSave, o
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Code changed since the last commit, usually by the AI building this design.
+  const [codeFiles, setCodeFiles] = useState<string[]>([]);
+  const [withCode, setWithCode] = useState(true);
   const suggestion = suggestMessage(diff, flowName);
   const blocked = state === "no-git" || state === "ignored";
 
   useEffect(() => {
     ref.current?.showModal();
-  }, []);
+    if (state === "ready") api.codeChanges().then((r) => setCodeFiles(r.files)).catch(() => {});
+  }, [state]);
 
   const submit = async () => {
     setBusy(true);
     setError("");
     try {
-      await onSave(message.trim() || suggestion);
+      await onSave(message.trim() || suggestion, withCode && codeFiles.length > 0);
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
@@ -72,6 +76,24 @@ export function SaveVersionDialog({ state, flowName, diff, nextNumber, onSave, o
               onChange={(e) => setMessage(e.target.value)}
             />
             <small>Leave it blank to use the suggestion.</small>
+          </label>
+        )}
+
+        {!blocked && codeFiles.length > 0 && (
+          <label className="check setup-check">
+            <input type="checkbox" checked={withCode} onChange={(e) => setWithCode(e.target.checked)} />
+            <span>
+              <strong>
+                Include my code changes ({codeFiles.length} {codeFiles.length === 1 ? "file" : "files"})
+              </strong>
+              . This version then holds the design and the code that builds it, so you can go back to both together.
+              <span className="save-code-files">
+                {codeFiles.slice(0, 6).map((f) => (
+                  <code key={f}>{f}</code>
+                ))}
+                {codeFiles.length > 6 && <span>and {codeFiles.length - 6} more</span>}
+              </span>
+            </span>
           </label>
         )}
 

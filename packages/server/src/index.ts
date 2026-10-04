@@ -233,7 +233,35 @@ app.post("/api/github/prs/:number/fetch", async (req, res) => {
 });
 
 app.post("/api/versions", async (req, res) => {
-  res.json(await history.save(String(req.body?.message ?? "")));
+  res.json(await history.save(String(req.body?.message ?? ""), { withCode: req.body?.withCode === true }));
+});
+
+app.get("/api/versions/code-changes", async (_req, res) => {
+  res.json({ files: await history.codeChanges() });
+});
+
+app.get("/api/versions/:sha/code", async (req, res) => {
+  res.json({ files: await history.codeAt(req.params.sha) });
+});
+
+/**
+ * Opens a version as a new branch: the design and the code go back to that commit, and new
+ * work continues from there. Unsaved work would be carried along or block the switch, so
+ * it has to be saved first.
+ */
+app.post("/api/versions/:sha/branch", async (req, res) => {
+  const [code, design] = await Promise.all([
+    history.codeChanges(),
+    git(project.root, ["status", "--porcelain", "--", `./${FLOW_DIR}`]),
+  ]);
+  if (code.length || design.trim()) {
+    throw new HttpError(
+      409,
+      "Save a version first, including your code changes, so nothing is left behind when the design and code switch.",
+    );
+  }
+  await repo.createBranch(String(req.body?.name ?? ""), req.params.sha);
+  res.json({ ok: true });
 });
 
 app.get("/api/versions/:sha/flow", async (req, res) => {

@@ -174,13 +174,15 @@ export class Repo {
     }
   }
 
-  async createBranch(name: string): Promise<void> {
+  /** Starts a new branch here, or at `from` (a commit), which brings back that commit's design and code. */
+  async createBranch(name: string, from?: string): Promise<void> {
     const clean = name.trim().replace(/\s+/g, "-");
     if (!BRANCH_NAME.test(clean) || (await this.tryRun(["check-ref-format", "--branch", clean])) === null) {
       throw new HttpError(400, "Branch names can use letters, numbers, dashes, dots and slashes, like design/new-checkout.");
     }
+    if (from !== undefined && !/^[0-9a-f]{7,40}$/.test(from)) throw new HttpError(400, "That isn't a valid version id.");
     try {
-      await this.run(["switch", "-c", clean]);
+      await this.run(["switch", "-c", clean, ...(from ? [from] : [])]);
     } catch (err) {
       throw new HttpError(409, friendlyGitError(err, "create the branch"));
     }

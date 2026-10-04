@@ -35,12 +35,13 @@ type Props = {
   onReview: (branch: string) => void;
   onTurnOn: () => void;
   onRestore: (sha: string) => Promise<void>;
+  onBranch: (sha: string, name: string) => Promise<void>;
 };
 
 const commitSide = (c: GraphCommit): Side => ({ kind: "version", sha: c.sha, label: commitLabel(c) });
 
 /** Shows two versions of the flow on one canvas, with what was added, removed and changed. */
-export function CompareView({ state, graph, draft, draftStats, review, onReview, onTurnOn, onRestore }: Props) {
+export function CompareView({ state, graph, draft, draftStats, review, onReview, onTurnOn, onRestore, onBranch }: Props) {
   const rf = useReactFlow<StepNode, ArrowEdge>();
   const bySha = useMemo(() => new Map(graph.commits.map((c) => [c.sha, c])), [graph.commits]);
   const head = graph.current.tip ? bySha.get(graph.current.tip) : graph.commits[0];
@@ -229,6 +230,7 @@ export function CompareView({ state, graph, draft, draftStats, review, onReview,
               review={reviewing ? review : null}
               hasDraft={!!draftStats}
               onRestore={onRestore}
+              onBranch={onBranch}
             />
             <div className="inspector-section">
               <h2 className="inspector-title">What changed</h2>
@@ -248,6 +250,7 @@ function VersionHeader({
   review,
   hasDraft,
   onRestore,
+  onBranch,
 }: {
   target: Side;
   commit?: GraphCommit;
@@ -255,15 +258,21 @@ function VersionHeader({
   review: Review | null;
   hasDraft: boolean;
   onRestore: (sha: string) => Promise<void>;
+  onBranch: (sha: string, name: string) => Promise<void>;
 }) {
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState<"restore" | "branch" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [branchName, setBranchName] = useState("");
+  const [code, setCode] = useState<string[] | null>(null);
+  const sha = commit?.sha;
 
   useEffect(() => {
-    setConfirming(false);
+    setConfirming(null);
     setError("");
-  }, [target]);
+    setCode(null);
+    if (sha) api.versionCode(sha).then((r) => setCode(r.files)).catch(() => setCode(null));
+  }, [target, sha]);
 
   if (!commit) {
     return (
@@ -274,16 +283,17 @@ function VersionHeader({
     );
   }
 
-  const restore = async () => {
+  const run = async (task: () => Promise<void>) => {
     setBusy(true);
     setError("");
     try {
-      await onRestore(commit.sha);
+      await task();
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
     }
   };
+  const restore = () => run(() => onRestore(commit.sha));
 
   return (
     <div className="inspector-section">
@@ -311,14 +321,64 @@ function VersionHeader({
           <code>{shortSha(commit.sha)}</code>
         )}
       </p>
+      {code && code.length > 0 && (
+        <details className="version-code">
+          <summary>
+            Saved with {code.length} code {code.length === 1 ? "file" : "files"}
+          </summary>
+          <ul>
+            {code.slice(0, 30).map((f) => (
+              <li key={f}>
+                <code>{f}</code>
+              </li>
+            ))}
+            {code.length > 30 && <li className="inspector-note">and {code.length - 30} more</li>}
+          </ul>
+        </details>
+      )}
       {!confirming ? (
-        <button type="button" className="button" onClick={() => setConfirming(true)}>
-          Restore this version
-        </button>
+        <div className="branch-actions">
+          <button type="button" className="button" onClick={() => setConfirming("restore")}>
+            Restore this design
+          </button>
+          <button type="button" className="button" onClick={() => setConfirming("branch")}>
+            <Icon name="branch" size={14} /> Open as a branch
+          </button>
+        </div>
+      ) : confirming === "branch" ? (
+        <form
+          className="confirm"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (branchName.trim()) void run(() => onBranch(commit.sha, branchName));
+          }}
+        >
+          <p>
+            Starts a new branch from this commit. Your design <strong>and your code</strong> go back to how they were
+            here, and new versions are saved on the branch. The branch you're on now stays as it is, so you can switch
+            back.
+          </p>
+          <input
+            autoFocus
+            value={branchName}
+            placeholder="Branch name, like try/old-checkout"
+            aria-label="New branch name"
+            onChange={(e) => setBranchName(e.target.value)}
+          />
+          <div className="confirm-actions">
+            <button type="submit" className="button-primary" disabled={busy || !branchName.trim()}>
+              {busy ? "Opening…" : "Open as a branch"}
+            </button>
+            <button type="button" className="button-quiet" onClick={() => setConfirming(null)} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </form>
       ) : (
         <div className="confirm">
           <p>
-            Your design will go back to how it was in this commit.
+            Your design will go back to how it was in this commit. Your code stays as it is; to bring the code back too,
+            open the version as a branch.
             {hasDraft
               ? " Your unsaved changes will be lost. Save a version first if you want to keep them."
               : " Your saved versions stay in history, so you can come back."}
@@ -327,7 +387,7 @@ function VersionHeader({
             <button type="button" className="button-primary" onClick={restore} disabled={busy}>
               {busy ? "Restoring…" : "Restore this design"}
             </button>
-            <button type="button" className="button-quiet" onClick={() => setConfirming(false)} disabled={busy}>
+            <button type="button" className="button-quiet" onClick={() => setConfirming(null)} disabled={busy}>
               Cancel
             </button>
           </div>

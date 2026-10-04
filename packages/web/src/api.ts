@@ -146,7 +146,13 @@ export const api = {
 
   turnOnHistory: () => request<{ state: HistoryState }>("/api/history/init", { method: "POST" }),
 
-  saveVersion: (message: string) => request<Version>("/api/versions", json({ message })),
+  saveVersion: (message: string, withCode = false) => request<Version>("/api/versions", json({ message, withCode })),
+
+  codeChanges: () => request<{ files: string[] }>("/api/versions/code-changes"),
+
+  versionCode: (sha: string) => request<{ files: string[] }>(`/api/versions/${sha}/code`),
+
+  branchFromVersion: (sha: string, name: string) => request<{ ok: true }>(`/api/versions/${sha}/branch`, json({ name })),
 
   versionFlow: (sha: string) => request<FlowFile>(`/api/versions/${sha}/flow`),
 

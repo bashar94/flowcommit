@@ -370,14 +370,25 @@ export function App() {
     requestAnimationFrame(() => void rf.fitView({ nodes: [{ id }], ...fitRef.current, maxZoom: 1, duration: 300 }));
   };
 
-  const saveVersion = async (message: string) => {
+  const saveVersion = async (message: string, withCode: boolean) => {
     if (history.state === "not-repo") await api.turnOnHistory();
     await flushSave();
-    const version = await api.saveVersion(message);
+    const version = await api.saveVersion(message, withCode);
     await loadHistory();
     await loadGraph();
     setSaveDialog(false);
-    notify(`Version ${version.number} saved`);
+    notify(`Version ${version.number} saved${withCode ? " with your code" : ""}`);
+  };
+
+  /** Opens a saved version as a new branch, so both the design and the code go back to it. */
+  const branchFromVersion = async (sha: string, name: string) => {
+    await flushSave();
+    ownGitChangeUntil.current = Date.now() + 3000;
+    await api.branchFromVersion(sha, name);
+    await afterGitChange();
+    setReview(null);
+    setMode("edit");
+    notify(`Opened this version on the new branch ${name.trim().replace(/\s+/g, "-")}. Its design and code are back.`);
   };
 
   const restoreVersion = async (sha: string) => {
@@ -956,6 +967,7 @@ export function App() {
             onReview={(branch) => void reviewBranch(branch)}
             onTurnOn={turnOnHistory}
             onRestore={restoreVersion}
+            onBranch={branchFromVersion}
           />
         ) : (
           <SyncContext.Provider value={sync.byStep}>

@@ -46,6 +46,7 @@ export class HttpError extends Error {
 export class History {
   // Commits never change, so the flow at a commit can be cached forever.
   private flowCache = new Map<string, FlowFile | null>();
+  private codeCache = new Map<string, string[]>();
 
   constructor(private project: Project) {}
 
@@ -141,24 +142,52 @@ export class History {
     }
   }
 
-  async save(message: string): Promise<Version> {
+  /**
+   * Saves the design as a version. With `withCode`, the project's code changes go into the same
+   * commit, so this version of the design and the code that builds it stay together.
+   */
+  async save(message: string, opts: { withCode?: boolean } = {}): Promise<Version> {
     await this.requireReady();
     const text = message.trim();
     if (!text) throw new HttpError(400, "Describe what changed in this version.");
 
-    await this.run(["add", "-A", "--", `./${FLOW_DIR}`]);
+    // Only the project folder: in a bigger repository, other folders are left alone.
+    const scope = opts.withCode ? "." : `./${FLOW_DIR}`;
+    await this.run(["add", "-A", "--", scope]);
     try {
-      await this.run(["diff", "--cached", "--quiet", "--", `./${FLOW_DIR}`]);
+      await this.run(["diff", "--cached", "--quiet", "--", scope]);
       throw new HttpError(409, "Nothing has changed since the last version.");
     } catch (err) {
       if (err instanceof HttpError) throw err;
       // `git diff --quiet` exits with an error when there are changes, which is what we want here.
     }
 
-    // `--only` commits just the design folder, never anything else the user has staged.
-    await this.run([...(await this.identityArgs()), "commit", "--only", "-m", text, "--", `./${FLOW_DIR}`]);
+    // `--only` commits just these paths, never anything else the user has staged elsewhere.
+    await this.run([...(await this.identityArgs()), "commit", "--only", "-m", text, "--", scope]);
     const [latest] = await this.list();
     return latest;
+  }
+
+  /** Code files (outside .flowcommit) changed since the last commit, relative to the project. */
+  async codeChanges(): Promise<string[]> {
+    if ((await this.state()) !== "ready") return [];
+    const lists = await Promise.all([
+      this.run(["ls-files", "-z", "--others", "--modified", "--deleted", "--exclude-standard", "--", "."]),
+      this.run(["diff", "--cached", "-z", "--name-only", "--relative", "--", "."]).catch(() => ""),
+    ]);
+    const files = lists.flatMap((out) => out.split("\0")).filter((f) => f && !f.startsWith(`${FLOW_DIR}/`));
+    return [...new Set(files)].sort();
+  }
+
+  /** Code files (outside .flowcommit) a commit changed, relative to the project. */
+  async codeAt(sha: string): Promise<string[]> {
+    if (!SHA.test(sha)) throw new HttpError(400, "That isn't a valid version id.");
+    const cached = this.codeCache.get(sha);
+    if (cached) return cached;
+    const out = await this.run(["diff-tree", "-z", "--root", "--no-commit-id", "--name-only", "-r", "--relative", sha, "--", "."]);
+    const files = out.split("\0").filter((f) => f && !f.startsWith(`${FLOW_DIR}/`));
+    this.codeCache.set(sha, files);
+    return files;
   }
 
   /** Puts a saved version back into the working flow. It becomes a draft until the next save. */
