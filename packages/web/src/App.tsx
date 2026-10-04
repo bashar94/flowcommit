@@ -54,6 +54,7 @@ import { BranchMenu } from "./components/BranchMenu.tsx";
 import { commitLabel, shortSha, type Side } from "./compare.ts";
 import { SaveVersionDialog } from "./components/SaveVersionDialog.tsx";
 import { Welcome } from "./components/Welcome.tsx";
+import { ProjectMenu } from "./components/ProjectMenu.tsx";
 import { AiPicker } from "./components/AiPicker.tsx";
 import { useToast } from "./components/Toasts.tsx";
 import { useAi } from "./ai.tsx";
@@ -792,9 +793,7 @@ export function App() {
           <Logo />
           FlowCommit
         </span>
-        <span className="topbar-project" title={meta.name}>
-          {meta.name}
-        </span>
+        <ProjectMenu flowName={meta.name} beforeSwitch={flushSave} />
         <div className="mode-switch" role="tablist" aria-label="View">
           <button
             type="button"

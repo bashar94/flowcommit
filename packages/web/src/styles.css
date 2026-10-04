@@ -190,8 +190,11 @@ button:disabled {
 }
 
 .topbar-project {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   max-width: 220px;
-  padding: 3px 10px;
+  padding: 3px 8px 3px 10px;
   border-radius: 999px;
   background: var(--surface-2);
   border: 1px solid var(--line);
@@ -4193,4 +4196,145 @@ button.change-row:hover {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ---------- Projects ---------- */
+
+.topbar-project:hover,
+.topbar-project[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.topbar-project > .icon {
+  flex: none;
+  color: var(--ink-faint);
+}
+
+.project-path {
+  word-break: break-all;
+}
+
+.project-options li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.project-options .branch-option {
+  min-width: 0;
+}
+
+.project-option-text {
+  display: grid;
+  min-width: 0;
+}
+
+.project-option-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-option-path {
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.project-forget {
+  flex: none;
+  opacity: 0;
+}
+
+.project-options li:hover .project-forget,
+.project-forget:focus-visible {
+  opacity: 1;
+}
+
+.folder-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.folder-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+
+.folder-crumbs > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.folder-crumbs .button-quiet {
+  padding: 2px 6px;
+}
+
+.folder-crumbs .button-quiet:disabled {
+  color: var(--ink);
+  font-weight: 700;
+  opacity: 1;
+}
+
+.folder-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  display: grid;
+  gap: 1px;
+  height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  align-content: start;
+}
+
+.folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-badge {
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.folder-badge.is-flow {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.folder-empty {
+  padding: 10px;
+}
+
+.folder-target {
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-popover .popover-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.project-options .branch-current {
+  white-space: nowrap;
 }

@@ -50,6 +50,8 @@ export function useBuild(
     events.addEventListener("flow", () => onOutside.current());
     // A commit, checkout, pull or push happened, here or in a terminal.
     events.addEventListener("git", () => onGit.current());
+    // Another project was opened, maybe in another tab. Everything on this page belongs to the old one.
+    events.addEventListener("project", () => window.location.reload());
     return () => events.close();
   }, [refresh]);
 

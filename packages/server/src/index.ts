@@ -1,7 +1,7 @@
 import express, { type ErrorRequestHandler } from "express";
 import path from "node:path";
-import { existsSync, mkdirSync, watch } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { existsSync, mkdirSync, watch, type FSWatcher } from "node:fs";
+import { mkdir, readFile } from "node:fs/promises";
 import { ZodError } from "zod";
 import {
   DraftFlowSchema,
@@ -32,16 +32,26 @@ import {
 } from "./connect.ts";
 import { findDrift, fingerprint, markReviewed, suggestFromCode } from "./codeSync.ts";
 import { Repo } from "./repo.ts";
+import {
+  checkProjectFolder,
+  createProjectFolder,
+  forgetProject,
+  listFolders,
+  recentProjects,
+  rememberProject,
+} from "./projects.ts";
 
 const PORT = Number(process.env.FLOWCOMMIT_PORT ?? 4318);
 const MAX_UPLOAD = "50mb";
 const ALLOWED_UPLOAD = /^(image|video)\//;
 
 const demoRoot = path.resolve(import.meta.dirname, "../../../demo-project");
-const projectRoot = process.env.FLOWCOMMIT_PROJECT ?? demoRoot;
-const project = new Project(projectRoot);
-const history = new History(project);
-const repo = new Repo(project, history);
+const projectRoot = path.resolve(process.env.FLOWCOMMIT_PROJECT ?? demoRoot);
+
+// The open project. Opening another one from the app swaps all three (see openProject below).
+let project = new Project(projectRoot);
+let history = new History(project);
+let repo = new Repo(project, history);
 
 // The demo folder sits inside the FlowCommit repo, which ignores it, so it gets its own repository.
 if (project.root === demoRoot && !existsSync(path.join(demoRoot, ".git"))) {
@@ -78,8 +88,57 @@ app.use((req, res, next) => {
 
 app.use(express.json({ limit: "5mb" }));
 
+/**
+ * Pages say which project they're showing. After another project is opened, a page that hasn't
+ * reloaded yet can't save its old flow into the new project.
+ */
+const PROJECT_HEADER = "x-flowcommit-project";
+app.use("/api", (req, res, next) => {
+  res.setHeader(PROJECT_HEADER, encodeURIComponent(project.root));
+  const claimed = req.headers[PROJECT_HEADER];
+  if (req.method !== "GET" && typeof claimed === "string" && !req.path.startsWith("/projects")) {
+    if (decodeURIComponent(claimed) !== project.root) {
+      res.status(409).json({ error: "FlowCommit switched to another project. Reload this page." });
+      return;
+    }
+  }
+  next();
+});
+
 app.get("/api/project", (_req, res) => {
   res.json({ name: project.name, path: project.root });
+});
+
+app.get("/api/projects", async (_req, res) => {
+  const recent = await recentProjects();
+  res.json({ current: { name: project.name, path: project.root }, recent: recent.filter((p) => p.path !== project.root) });
+});
+
+app.get("/api/folders", async (req, res) => {
+  res.json(await listFolders(typeof req.query.path === "string" ? req.query.path : undefined));
+});
+
+app.post("/api/projects/open", async (req, res) => {
+  const root = await checkProjectFolder(String(req.body?.path ?? ""));
+  await openProject(root);
+  res.json({ name: project.name, path: project.root });
+});
+
+/** A new project is a new folder with Git turned on, so every version is kept from the start. */
+app.post("/api/projects/create", async (req, res) => {
+  const root = await createProjectFolder(String(req.body?.parent ?? ""), String(req.body?.name ?? ""));
+  try {
+    await git(root, ["init", "-q"]);
+  } catch {
+    // Without Git the project still opens; History offers to turn it on.
+  }
+  await openProject(root);
+  res.json({ name: project.name, path: project.root });
+});
+
+app.delete("/api/projects/recent", async (req, res) => {
+  await forgetProject(String(req.body?.path ?? ""));
+  res.json({ recent: (await recentProjects()).filter((p) => p.path !== project.root) });
 });
 
 app.get("/api/flow", async (_req, res) => {
@@ -333,25 +392,35 @@ app.get("/api/events", async (req, res) => {
   });
 });
 
-await project.readFlow(); // makes sure .flowcommit/ exists before watching it
 const pending = new Map<string, NodeJS.Timeout>();
-watch(path.join(project.root, FLOW_DIR), (_event, file) => {
-  if (file !== STATUS_FILE && file !== FLOW_FILE && file !== SUGGESTIONS_FILE) return;
-  clearTimeout(pending.get(file));
-  pending.set(
-    file,
-    setTimeout(async () => {
-      if (file === STATUS_FILE) {
-        send("status", await project.readStatus());
-      } else if (file === SUGGESTIONS_FILE) {
-        send("suggestions", await project.readSuggestions());
-      } else {
-        const text = await readFile(project.flowPath, "utf8").catch(() => "");
-        if (text && !project.wroteFlow(text)) send("flow", { changed: true });
-      }
-    }, 80),
-  );
-});
+let flowWatcher: FSWatcher | undefined;
+async function watchFlow() {
+  flowWatcher?.close();
+  for (const t of pending.values()) clearTimeout(t);
+  // Makes sure .flowcommit/ exists before watching it. A flow that can't be read (say, a merge
+  // conflict) is reported by the editor, and still watched so fixing it shows up right away.
+  await mkdir(path.join(project.root, FLOW_DIR), { recursive: true });
+  await project.readFlow().catch(() => {});
+  const watched = project;
+  flowWatcher = watch(path.join(watched.root, FLOW_DIR), (_event, file) => {
+    if (file !== STATUS_FILE && file !== FLOW_FILE && file !== SUGGESTIONS_FILE) return;
+    clearTimeout(pending.get(file));
+    pending.set(
+      file,
+      setTimeout(async () => {
+        if (watched !== project) return; // another project was opened meanwhile
+        if (file === STATUS_FILE) {
+          send("status", await project.readStatus());
+        } else if (file === SUGGESTIONS_FILE) {
+          send("suggestions", await project.readSuggestions());
+        } else {
+          const text = await readFile(project.flowPath, "utf8").catch(() => "");
+          if (text && !project.wroteFlow(text)) send("flow", { changed: true });
+        }
+      }, 80),
+    );
+  });
+}
 
 /**
  * Git writes these files whenever a commit, checkout, pull, fetch or push happens, whether it was
@@ -385,9 +454,28 @@ async function watchGit() {
   add(path.join(dir, "logs"), {}, (f) => f === "HEAD");
   add(path.join(dir, "refs"), { recursive: true }, (f) => !f.endsWith(".lock"));
 }
-await watchGit();
 
-app.use("/api/assets", express.static(project.assetsDir, { fallthrough: false }));
+/**
+ * Switches FlowCommit to another project folder. A folder without a flow gets an empty one.
+ * Open pages are told, and reload.
+ */
+async function openProject(root: string) {
+  project = new Project(root);
+  history = new History(project);
+  repo = new Repo(project, history);
+  assets = express.static(project.assetsDir, { fallthrough: false });
+  await watchFlow();
+  await watchGit();
+  await rememberProject(project.root, project.name).catch(() => {});
+  send("project", { name: project.name, path: project.root });
+}
+
+await watchFlow();
+await watchGit();
+await rememberProject(project.root, project.name).catch(() => {});
+
+let assets = express.static(project.assetsDir, { fallthrough: false });
+app.use("/api/assets", (req, res, next) => assets(req, res, next));
 
 const onError: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {

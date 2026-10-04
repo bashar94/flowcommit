@@ -77,6 +77,17 @@ export type Version = {
   stats: DiffStats | null;
 };
 
+export type ProjectRef = { name: string; path: string };
+export type RecentProject = ProjectRef & { openedAt: string; missing?: boolean };
+export type FolderListing = {
+  path: string;
+  parent: string | null;
+  home: string;
+  flowcommit: boolean;
+  git: boolean;
+  folders: { name: string; path: string; flowcommit: boolean; git: boolean }[];
+};
+
 const json = (body: unknown): RequestInit => ({
   method: "POST",
   headers: { "Content-Type": "application/json" },
@@ -85,16 +96,22 @@ const json = (body: unknown): RequestInit => ({
 
 const UNREACHABLE = "Can't reach the FlowCommit server. Start it with npm run dev, then try again.";
 
+/** The project this page shows, as the server reported it. Sent with every change. */
+let shownProject: string | null = null;
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(url, init);
+    const headers = new Headers(init?.headers);
+    if (shownProject) headers.set("X-FlowCommit-Project", shownProject);
+    res = await fetch(url, { ...init, headers });
   } catch (err) {
     if ((err as Error).name === "AbortError") throw err;
     throw new Error(UNREACHABLE);
   }
   // The dev proxy answers 502-504 when the FlowCommit server is down or restarting.
   if (res.status >= 502 && res.status <= 504) throw new Error(UNREACHABLE);
+  shownProject ??= res.headers.get("X-FlowCommit-Project");
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? `The server answered with status ${res.status}.`);
   return body as T;
@@ -102,6 +119,17 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   project: () => request<{ name: string; path: string }>("/api/project"),
+
+  projects: () => request<{ current: ProjectRef; recent: RecentProject[] }>("/api/projects"),
+
+  folders: (path?: string) => request<FolderListing>(`/api/folders${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+
+  openProject: (path: string) => request<ProjectRef>("/api/projects/open", json({ path })),
+
+  createProject: (parent: string, name: string) => request<ProjectRef>("/api/projects/create", json({ parent, name })),
+
+  forgetProject: (path: string) =>
+    request<{ recent: RecentProject[] }>("/api/projects/recent", { ...json({ path }), method: "DELETE" }),
 
   loadFlow: () => request<FlowFile>("/api/flow"),
 
