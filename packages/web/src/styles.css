@@ -4518,3 +4518,44 @@ button.change-row:hover {
   font: inherit;
   font-size: 11px;
 }
+
+/* ---------- Opening code ---------- */
+
+.build-files-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.build-files-head select {
+  width: auto;
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.build-file {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.build-file:hover code {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

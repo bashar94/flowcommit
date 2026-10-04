@@ -9,6 +9,7 @@ import { useToast } from "./Toasts.tsx";
 import { WordDiff } from "./ChangeDetails.tsx";
 import { timeAgo } from "../time.ts";
 import { BUILD_LABEL, agentLabel, type StepBuildInfo } from "../build.tsx";
+import { EDITORS, openInEditor, readEditor, saveEditor, useProjectRoot, type EditorId } from "../editor.ts";
 
 export type Selection =
   | { type: "none" }
@@ -524,20 +525,57 @@ function BuildSection({
             </div>
           )}
           {record?.note && <p className="build-summary">{record.note}</p>}
-          {record && record.files.length > 0 && (
-            <ul className="build-files">
-              {record.files.map((f) => (
-                <li key={f}>
-                  <code>{f}</code>
-                </li>
-              ))}
-            </ul>
-          )}
+          {record && record.files.length > 0 && <BuildFiles files={record.files} />}
           <button type="button" className="button-quiet build-reset" onClick={onReset}>
             Mark as not built
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+/** The files a step's code is in. Clicking one opens it in your code editor. */
+function BuildFiles({ files }: { files: string[] }) {
+  const root = useProjectRoot();
+  const [editor, setEditor] = useState<EditorId>(readEditor);
+  return (
+    <div className="build-files-block">
+      <div className="build-files-head">
+        <span>Code</span>
+        <label>
+          <span className="visually-hidden">Open files in</span>
+          <select
+            value={editor}
+            onChange={(e) => {
+              const next = e.target.value as EditorId;
+              setEditor(next);
+              saveEditor(next);
+            }}
+          >
+            {(Object.keys(EDITORS) as EditorId[]).map((id) => (
+              <option key={id} value={id}>
+                Open in {EDITORS[id].label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <ul className="build-files">
+        {files.map((f) => (
+          <li key={f}>
+            <button
+              type="button"
+              className="build-file"
+              disabled={!root}
+              title={`Open ${f} in ${EDITORS[editor].label}`}
+              onClick={() => root && openInEditor(editor, root, f)}
+            >
+              <code>{f}</code>
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import express, { type ErrorRequestHandler } from "express";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, watch, type FSWatcher } from "node:fs";
-import { mkdir, readFile, readdir, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { ZodError, z } from "zod";
 import {
   DraftFlowSchema,
@@ -337,6 +337,16 @@ async function existingFiles(files: string[]): Promise<string[]> {
   return [...new Set(found)].slice(0, 8);
 }
 
+/** Opens one of the project's files in this computer's default app for it. */
+app.post("/api/open-file", async (req, res) => {
+  const [file] = await existingFiles([String(req.body?.file ?? "")]);
+  // Follow links too: a link inside the project mustn't open something outside it.
+  const [real, root] = await Promise.all([realpath(path.join(project.root, file ?? "")).catch(() => ""), realpath(project.root)]);
+  if (!file || !real.startsWith(root + path.sep)) throw new HttpError(404, "That file isn't in this project.");
+  openWithSystem(real);
+  res.json({ ok: true });
+});
+
 // ----- Building with an AI agent -----
 
 app.get("/api/build", async (_req, res) => {
@@ -605,7 +615,7 @@ function listen(port: number, triesLeft: number) {
     const url = `http://localhost:${port}`;
     console.log(serveWeb ? `FlowCommit is running at ${url}` : `FlowCommit server on http://127.0.0.1:${port}`);
     console.log(`Project: ${project.root}`);
-    if (serveWeb && process.env.FLOWCOMMIT_OPEN === "1") openBrowser(url);
+    if (serveWeb && process.env.FLOWCOMMIT_OPEN === "1") openWithSystem(url);
   });
   listener.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code !== "EADDRINUSE") throw err;
@@ -620,10 +630,15 @@ function listen(port: number, triesLeft: number) {
 }
 listen(PORT, 20);
 
-function openBrowser(url: string) {
+/** Opens a link or file the way double-clicking it would. */
+function openWithSystem(target: string) {
   const [cmd, args] =
-    process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
+    process.platform === "darwin"
+      ? ["open", [target]]
+      : process.platform === "win32"
+        ? ["cmd", ["/c", "start", "", target]]
+        : ["xdg-open", [target]];
   spawn(cmd, args, { stdio: "ignore", detached: true })
-    .on("error", () => console.log(`Open ${url} in your browser.`))
+    .on("error", () => console.log(`Open ${target} yourself; FlowCommit couldn't.`))
     .unref();
 }

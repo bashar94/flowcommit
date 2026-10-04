@@ -166,6 +166,8 @@ export const api = {
   aiDraft: (body: { provider: ProviderId; description: string }, signal?: AbortSignal) =>
     request<DraftFlow>("/api/ai/draft", { ...json(body), signal }),
 
+  openFile: (file: string) => request<{ ok: true }>("/api/open-file", json({ file })),
+
   aiImport: (provider: ProviderId, signal?: AbortSignal) =>
     request<ImportedFlow>("/api/ai/import", { ...json({ provider }), signal }),
 
