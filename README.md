@@ -7,6 +7,7 @@ flowchart, with instructions, screenshots and videos on each step. Claude Code o
 builds the code from it, one step at a time. Every change to the design is a version in Git
 that you can compare, review and go back to.
 
+[![npm](https://img.shields.io/npm/v/flowcommit.svg)](https://www.npmjs.com/package/flowcommit)
 [![CI](https://github.com/bashar94/flowcommit/actions/workflows/ci.yml/badge.svg)](https://github.com/bashar94/flowcommit/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
@@ -42,18 +43,14 @@ read, makes it the spec your AI agent builds from, and keeps both in step:
 
 You need [Node.js](https://nodejs.org) 20.19 or newer and Git. To build with AI, install
 [Claude Code](https://claude.com/claude-code) or [Codex CLI](https://github.com/openai/codex)
-and sign in once.
+and sign in once. Then, in your app's folder (or an empty one for a new app):
 
 ```sh
-git clone https://github.com/bashar94/flowcommit.git
-cd flowcommit
-npm install
-npm run build
-npm link                  # makes the flowcommit command available everywhere
-
-cd ~/path/to/your-app
-flowcommit                # opens FlowCommit for this folder in your browser
+npx flowcommit
 ```
+
+It opens FlowCommit for that folder in your browser. To have a `flowcommit` command
+everywhere instead, run `npm install -g flowcommit`.
 
 Then:
 
@@ -66,9 +63,6 @@ Then:
 FlowCommit opens on the first free port from 4318 (`--port` picks one, `--no-open` skips the
 browser). Inside the app, click the project name at the top left to open another folder, pick
 a recent project, or start a new one.
-
-Once FlowCommit is on npm, you won't need to clone it: `npx flowcommit` in your app's folder
-will be enough.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/simple-dark.png">
