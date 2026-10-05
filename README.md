@@ -52,7 +52,8 @@ npx flowcommit
 It opens FlowCommit for that folder in your browser. To have a `flowcommit` command
 everywhere instead, run `npm install -g flowcommit`.
 
-Then:
+**[The getting started guide](docs/getting-started.md)** walks through it step by step, for a
+new app and for an app you already have. In short:
 
 1. **Start a flow:** describe your app and let AI draw it, start from a template, or, if the
    folder already has code, let AI draw the flow from your code.

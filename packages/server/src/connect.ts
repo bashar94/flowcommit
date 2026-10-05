@@ -5,34 +5,40 @@ import type { Project } from "./project.ts";
 
 /**
  * The command that runs one of FlowCommit's scripts (mcp or hook), as [program, ...args].
- * - Run through npx, FlowCommit lives in npm's cache, which can be cleared or replaced by a
- *   newer version, so AI tools are told to start it through npx too.
- * - Installed (npm install -g or npm link), it runs its bundled JavaScript with Node.
- * - From a copy of the source, it runs the TypeScript through tsx.
+ * - Installed from npm (with npx, or npm install), AI tools start it through npx. That keeps
+ *   working after npm clears its cache or updates FlowCommit, and on teammates' computers.
+ * - Built from a copy of the source, it runs the bundled JavaScript with this Node.
+ * - From the source itself, it runs the TypeScript through tsx.
  */
 function scriptLaunch(name: "mcp" | "hook"): string[] {
   if (import.meta.filename.endsWith(".js")) {
-    if (import.meta.dirname.split(path.sep).includes("_npx")) return ["npx", "-y", "flowcommit", name];
+    const parts = import.meta.dirname.split(path.sep);
+    if (parts.includes("_npx") || parts.includes("node_modules")) return ["npx", "-y", "flowcommit", name];
     return [process.execPath, path.join(import.meta.dirname, `${name}.js`)];
   }
   return [process.execPath, fileURLToPath(import.meta.resolve("tsx/cli")), path.join(import.meta.dirname, `${name}.ts`)];
 }
 
 /** How an AI CLI should start FlowCommit's MCP server for this project. */
-export function mcpLaunch(project: Project) {
+/**
+ * How an AI CLI should start FlowCommit's MCP server. Claude Code starts project servers (from
+ * .mcp.json) in the project folder, so they're written without the folder's path, and work for
+ * teammates who clone the project somewhere else. Codex's setting covers every project, so it
+ * names the folder.
+ */
+export function mcpLaunch(project: Project, opts: { inProjectFolder?: boolean } = {}) {
   const [command, ...args] = scriptLaunch("mcp");
-  return { command, args: [...args, "--project", project.root] };
+  return { command, args: opts.inProjectFolder ? args : [...args, "--project", project.root] };
 }
 
 const quote = (s: string) => (/^[\w./:@-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`);
 
 /** Terminal commands that register the server with each CLI, for people who prefer to run them. */
 export function connectCommands(project: Project) {
-  const { command, args } = mcpLaunch(project);
-  const launch = [command, ...args].map(quote).join(" ");
+  const launch = (l: { command: string; args: string[] }) => [l.command, ...l.args].map(quote).join(" ");
   return {
-    claude: `claude mcp add flowcommit --scope project -- ${launch}`,
-    codex: `codex mcp add flowcommit -- ${launch}`,
+    claude: `claude mcp add flowcommit --scope project -- ${launch(mcpLaunch(project, { inProjectFolder: true }))}`,
+    codex: `codex mcp add flowcommit -- ${launch(mcpLaunch(project))}`,
   };
 }
 
@@ -61,7 +67,7 @@ export async function isClaudeConnected(project: Project): Promise<boolean> {
 export async function connectClaude(project: Project): Promise<void> {
   const config = await readMcpConfig(project);
   if (config === null) throw new Error("This project's .mcp.json isn't valid JSON, so FlowCommit left it alone. Fix it, then try again.");
-  const next = { ...config, mcpServers: { ...(config.mcpServers ?? {}), flowcommit: { type: "stdio", ...mcpLaunch(project) } } };
+  const next = { ...config, mcpServers: { ...(config.mcpServers ?? {}), flowcommit: { type: "stdio", ...mcpLaunch(project, { inProjectFolder: true }) } } };
   await writeFile(mcpConfigPath(project), JSON.stringify(next, null, 2) + "\n", "utf8");
 }
 

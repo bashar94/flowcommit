@@ -46,7 +46,8 @@ const IMAGE_TYPES: Record<string, string> = {
 function projectRoot(): string {
   const i = process.argv.indexOf("--project");
   if (i !== -1 && process.argv[i + 1]) return process.argv[i + 1];
-  return process.env.FLOWCOMMIT_PROJECT ?? process.cwd();
+  // Claude Code starts project servers in the project folder, and may also say where it is.
+  return process.env.FLOWCOMMIT_PROJECT ?? process.env.CLAUDE_PROJECT_DIR ?? process.cwd();
 }
 
 const project = new Project(projectRoot());
