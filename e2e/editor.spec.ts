@@ -229,6 +229,9 @@ test("a big app drawn from code arrives as parts, folded so it reads at a glance
 });
 
 test("a missing part can be drawn from the code and added without changing the rest", async ({ page }) => {
+  // The AI tools are looked up when the page loads, so pretend before loading it.
+  await pretendClaudeIsInstalled(page);
+  await page.reload();
   await startFromStoreTemplate(page);
   await expect.poll(async () => (await flowOnDisk()).nodes.length).toBe(9);
   await page.waitForTimeout(1000); // let the layout settle and save
@@ -252,7 +255,6 @@ test("a missing part can be drawn from the code and added without changing the r
       },
     }),
   );
-  await pretendClaudeIsInstalled(page);
   await page.getByRole("button", { name: /^Sync/ }).click();
   await page.getByRole("textbox", { name: "Part of the app to add" }).fill("The AI chatbot");
   await page.getByRole("button", { name: "Draw it" }).click();
