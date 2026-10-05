@@ -187,3 +187,84 @@ test("developer details: one quiet line on the card, hidden in Simple, and searc
   await page.keyboard.press("Enter");
   await expect(page.locator(".react-flow__node.selected")).toContainText("Charge the card");
 });
+
+const pretendClaudeIsInstalled = (page: Page) =>
+  page.route("**/api/ai", (route) =>
+    route.fulfill({ json: { providers: [{ id: "claude", label: "Claude Code", available: true, version: "test", install: "" }] } }),
+  );
+
+test("a big app drawn from code arrives as parts, folded so it reads at a glance", async ({ page }) => {
+  await mkdir(path.join(projectDir, "src"), { recursive: true });
+  await writeFile(path.join(projectDir, "src", "app.js"), "export {};\n");
+  const parts = [
+    { id: "p1", title: "Sign in" },
+    { id: "p2", title: "Reports" },
+    { id: "p3", title: "AI chat assistant" },
+  ];
+  // 8 steps in each part: a start, then a chain.
+  const steps = parts.flatMap((p, pi) =>
+    Array.from({ length: 8 }, (_, i) => ({
+      id: `${p.id}s${i}`,
+      kind: pi === 0 && i === 0 ? "start" : i === 7 ? "end" : "step",
+      title: `${p.title} ${i + 1}`,
+      instructions: "",
+      files: [],
+      part: p.id,
+      done: true,
+    })),
+  );
+  const arrows = steps.slice(1).map((s, i) => ({ from: steps[i].id, to: s.id, label: "" }));
+  await page.route("**/api/ai/import", (route) => route.fulfill({ json: { name: "Big app", description: "", stack: [], parts, steps, arrows } }));
+  await pretendClaudeIsInstalled(page);
+  await page.reload();
+  await page.getByRole("button", { name: "Draw it from my code" }).click();
+
+  await expect(page.locator(".group-card")).toHaveCount(3);
+  await expect(page.locator(".group-card").filter({ hasText: "AI chat assistant" })).toContainText("8 steps");
+  await page.locator(".group-card-body").filter({ hasText: "AI chat assistant" }).click();
+  await expect(card(page, "AI chat assistant 3")).toBeVisible();
+  await expect.poll(async () => (await flowOnDisk()).groups?.map((g: { title: string }) => g.title)).toEqual(
+    expect.arrayContaining(["Sign in", "Reports", "AI chat assistant"]),
+  );
+});
+
+test("a missing part can be drawn from the code and added without changing the rest", async ({ page }) => {
+  await startFromStoreTemplate(page);
+  await expect.poll(async () => (await flowOnDisk()).nodes.length).toBe(9);
+  await page.waitForTimeout(1000); // let the layout settle and save
+  const before = (await flowOnDisk()).nodes.map((n: { id: string; position: unknown }) => ({ id: n.id, position: n.position }));
+  const cartId = (await flowOnDisk()).nodes.find((n: { title: string }) => n.title === "Cart").id;
+  await page.route("**/api/ai/import-part", (route) =>
+    route.fulfill({
+      json: {
+        title: "AI chat assistant",
+        stack: ["Gemini"],
+        steps: [
+          { id: "c1", kind: "screen", title: "Chat panel", instructions: "", files: [], codeRef: "/chat", uses: [], done: true },
+          { id: "c2", kind: "decision", title: "Question allowed?", instructions: "", files: [], codeRef: "", uses: ["Gemini"], done: true },
+          { id: "c3", kind: "api", title: "Run the agent", instructions: "", files: [], codeRef: "POST /api/ai/ask", uses: ["Gemini"], done: true },
+        ],
+        arrows: [
+          { from: "c1", to: "c2", label: "" },
+          { from: "c2", to: "c3", label: "Yes" },
+        ],
+        connect: [{ from: cartId, to: "c1", label: "Ask AI" }],
+      },
+    }),
+  );
+  await pretendClaudeIsInstalled(page);
+  await page.getByRole("button", { name: /^Sync/ }).click();
+  await page.getByRole("textbox", { name: "Part of the app to add" }).fill("The AI chatbot");
+  await page.getByRole("button", { name: "Draw it" }).click();
+
+  await expect(page.getByText(/added "AI chat assistant" with 3 steps/)).toBeVisible();
+  await expect(page.locator(".group-frame")).toContainText("AI chat assistant");
+  await expect(card(page, "Chat panel").locator(".step-dev")).toHaveText("/chat");
+  await expect.poll(async () => (await flowOnDisk()).nodes.length).toBe(12);
+  const flow = await flowOnDisk();
+  // The steps that were there haven't moved, and the new part is joined to Cart.
+  for (const b of before) expect(flow.nodes.find((n: { id: string }) => n.id === b.id).position).toEqual(b.position);
+  const chat = flow.nodes.find((n: { title: string }) => n.title === "Chat panel");
+  expect(flow.edges.some((e: { source: string; target: string }) => e.source === cartId && e.target === chat.id)).toBe(true);
+  expect(flow.stack).toEqual(["Gemini"]);
+});

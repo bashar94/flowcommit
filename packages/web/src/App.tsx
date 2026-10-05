@@ -32,6 +32,7 @@ import {
   type DraftFlow,
   type FlowFile,
   type ImportedFlow,
+  type ImportedPart,
   type PluginsInfo,
   type NodeKind,
 } from "@flowcommit/shared";
@@ -648,21 +649,37 @@ export function App() {
   const applyImported = async (flow: ImportedFlow) => {
     let stepIds = new Map<string, string>();
     const forget = () => void api.markImported({ remove: [...stepIds.values()] }).then(() => build.refresh());
+    // Each part of the app becomes a group. A big app opens with its parts folded, so it reads
+    // as a few cards first; open a part to see its steps.
+    const parts = (flow.parts ?? []).filter((p) => flow.steps.some((s) => s.part === p.id));
+    const groupOf = new Map(parts.length > 1 ? parts.map((p) => [p.id, newGroupId()]) : []);
+    const foldParts = groupOf.size > 1 && flow.steps.length > 20;
     stepIds = applyFlow(
       flow,
       flow.description,
-      `${ai?.label ?? "AI"} drew ${flow.steps.length} steps from your code. Check it over, then save a version.`,
+      groupOf.size > 1
+        ? `${ai?.label ?? "AI"} drew ${flow.steps.length} steps in ${groupOf.size} parts from your code.${foldParts ? " Click a part to open it." : ""} Check it over, then save a version.`
+        : `${ai?.label ?? "AI"} drew ${flow.steps.length} steps from your code. Check it over, then save a version.`,
       forget,
     );
     // What the AI found in the code goes on the steps for developers: routes, endpoints, services.
     const dev = new Map(
       flow.steps.map((s) => [
         stepIds.get(s.id)!,
-        { ...(s.codeRef?.trim() ? { codeRef: s.codeRef.trim() } : {}), ...(s.uses?.length ? { uses: s.uses } : {}) },
+        {
+          ...(s.codeRef?.trim() ? { codeRef: s.codeRef.trim() } : {}),
+          ...(s.uses?.length ? { uses: s.uses } : {}),
+          ...(s.part && groupOf.has(s.part) ? { group: groupOf.get(s.part) } : {}),
+        },
       ]),
     );
     setNodes((ns) => ns.map((n) => (dev.has(n.id) ? { ...n, data: { ...n.data, ...dev.get(n.id) } } : n)));
-    if (flow.stack?.length) setMeta((m) => ({ ...m, stack: flow.stack }));
+    setMeta((m) => ({
+      ...m,
+      ...(flow.stack?.length ? { stack: flow.stack } : {}),
+      groups: parts.filter((p) => groupOf.has(p.id)).map((p) => ({ id: groupOf.get(p.id)!, title: p.title })),
+    }));
+    if (foldParts) setFolded(new Set(groupOf.values()));
     const done = flow.steps.filter((s) => s.done);
     try {
       await api.markImported({
@@ -676,6 +693,82 @@ export function App() {
       await build.refresh();
     } catch (err) {
       notify(`The flow is drawn, but FlowCommit couldn't mark its steps as built: ${(err as Error).message}`);
+    }
+  };
+
+  /**
+   * Adds one part of the app, drawn by AI from its code, to the flow as a new group, placed to
+   * the right of what's there and joined to the steps it connects to. The rest of the flow
+   * isn't moved or changed.
+   */
+  const applyPart = async (part: ImportedPart) => {
+    const ids = new Map(part.steps.map((s) => [s.id, newId("n")]));
+    const inner = part.arrows.map((a) => ({ source: ids.get(a.from)!, target: ids.get(a.to)! , label: a.label }));
+    const hasIncoming = new Set(inner.map((a) => a.target));
+    const roots = [...ids.values()].filter((id) => !hasIncoming.has(id));
+    const placed = layoutFlow([...ids.values()], inner, roots);
+    const existing = nodes.filter((n) => !n.hidden);
+    const right = existing.length ? Math.max(...existing.map((n) => n.position.x + (n.measured?.width ?? LAYOUT.cardWidth))) : 0;
+    // Line the part up with the step people reach it from, when there is one.
+    const entry = part.connect.find((c) => !ids.has(c.from));
+    const top = (entry && nodes.find((n) => n.id === entry.from)?.position.y) ?? (existing.length ? Math.min(...existing.map((n) => n.position.y)) : 0);
+    const minX = Math.min(...[...placed.values()].map((p) => p.x));
+    const groupId = newGroupId();
+    const added: StepNode[] = part.steps.map((s) => {
+      const id = ids.get(s.id)!;
+      const p = placed.get(id)!;
+      return {
+        id,
+        type: "step",
+        position: { x: right + 160 + (p.x - minX), y: top + p.y },
+        data: {
+          kind: s.kind,
+          title: s.title,
+          instructions: s.instructions,
+          attachments: [],
+          tags: [],
+          group: groupId,
+          ...(s.codeRef.trim() ? { codeRef: s.codeRef.trim() } : {}),
+          ...(s.uses.length ? { uses: s.uses } : {}),
+        },
+      };
+    });
+    const map = (id: string) => ids.get(id) ?? id;
+    const newEdges = [...part.arrows, ...part.connect].map((a) => toCanvasEdge(newId("e"), map(a.from), map(a.to), a.label));
+    const before = { meta, nodes, edges };
+    setNodes((ns) => [...ns.map((n) => (n.selected ? { ...n, selected: false } : n)), ...added]);
+    setEdges((es) => [...es, ...newEdges]);
+    setMeta((m) => ({
+      ...m,
+      groups: [...m.groups, { id: groupId, title: part.title }],
+      stack: [...new Set([...m.stack, ...part.stack])],
+    }));
+    setTimeout(() => void rfRef.current.fitView({ nodes: added.map((n) => ({ id: n.id })), ...fitRef.current, duration: 400 }), 120);
+    const addedIds = added.map((n) => n.id);
+    notify(`${ai?.label ?? "AI"} added "${part.title}" with ${added.length} steps. Check it over, then save a version.`, {
+      action: {
+        label: "Undo",
+        run: () => {
+          setMeta(before.meta);
+          setNodes(before.nodes);
+          setEdges(before.edges);
+          void api.markImported({ remove: addedIds }).then(() => build.refresh());
+        },
+      },
+    });
+    try {
+      await api.markImported({
+        source: ai?.label ?? "",
+        steps: part.steps
+          .filter((s) => s.done)
+          .map((s) => {
+            const node = added.find((n) => n.id === ids.get(s.id))!;
+            return { stepId: node.id, spec: specOf({ ...node.data }), files: s.files };
+          }),
+      });
+      await build.refresh();
+    } catch (err) {
+      notify(`The part is drawn, but FlowCommit couldn't mark its steps as built: ${(err as Error).message}`);
     }
   };
 
@@ -1344,6 +1437,7 @@ export function App() {
                     onAccept={(s) => void acceptSuggestion(s)}
                     onDismiss={(s) => void dismissSuggestion(s)}
                     onShowStep={(id) => selectStep(id)}
+                    onPart={(p) => void applyPart(p)}
                     onAnalyzed={(added) => {
                       void sync.refresh();
                       // -1 means a flag was cleared by hand; nothing new to announce.

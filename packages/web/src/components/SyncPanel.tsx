@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { describeSuggestion, type FlowFile, type Suggestion } from "@flowcommit/shared";
+import { describeSuggestion, type FlowFile, type ImportedPart, type Suggestion } from "@flowcommit/shared";
 import { api, type SyncState } from "../api.ts";
 import { useAi } from "../ai.tsx";
 import { Icon } from "../icons.tsx";
@@ -12,6 +12,8 @@ type Props = {
   onDismiss: (s: Suggestion) => void;
   onShowStep: (id: string) => void;
   onAnalyzed: (added: number) => void;
+  /** A part of the app AI drew from the code, to add to the flow. */
+  onPart: (part: ImportedPart) => void;
   onClose: () => void;
 };
 
@@ -28,10 +30,27 @@ const CHANGE_ICON = {
  * suggest, and the person decides here. Code edited outside a build is flagged, so it can be
  * turned into suggestions instead of quietly drifting away from the design.
  */
-export function SyncPanel({ state, flow, onAccept, onDismiss, onShowStep, onAnalyzed, onClose }: Props) {
+export function SyncPanel({ state, flow, onAccept, onDismiss, onShowStep, onAnalyzed, onPart, onClose }: Props) {
   const { active } = useAi();
-  const [running, setRunning] = useState<{ controller: AbortController; whole: boolean } | null>(null);
+  const [running, setRunning] = useState<{ controller: AbortController; whole: boolean; part?: string } | null>(null);
   const [error, setError] = useState("");
+  const [part, setPart] = useState("");
+
+  const drawPart = async () => {
+    const what = part.trim();
+    if (!active || !what) return;
+    const controller = new AbortController();
+    setRunning({ controller, whole: false, part: what });
+    setError("");
+    try {
+      onPart(await api.aiImportPart(active.id, what, controller.signal));
+      setPart("");
+    } catch (err) {
+      if ((err as Error).name !== "AbortError") setError((err as Error).message);
+    } finally {
+      setRunning(null);
+    }
+  };
 
   const analyze = async (whole: boolean) => {
     if (!active) return;
@@ -183,7 +202,7 @@ export function SyncPanel({ state, flow, onAccept, onDismiss, onShowStep, onAnal
             <span className="ai-pulse" aria-hidden="true">
               <Icon name="sparkle" size={14} />
             </span>
-            {active?.label} is reading {running.whole ? "the whole project" : "the changed code"}…
+            {active?.label} is reading {running.part ? `the code for "${running.part}"` : running.whole ? "the whole project" : "the changed code"}…
             <button type="button" className="button-quiet" onClick={() => running.controller.abort()}>
               Cancel
             </button>
@@ -201,6 +220,32 @@ export function SyncPanel({ state, flow, onAccept, onDismiss, onShowStep, onAnal
             </button>
           </>
         )}
+      </div>
+
+      <div className="inspector-section">
+        <h3 className="dialog-subtitle">Add a part that's missing</h3>
+        <p className="inspector-note">
+          Name a part of the app the flowchart doesn't show yet. AI reads its code and adds it as a new group, joined to the
+          steps it connects to. Nothing else in the flowchart changes.
+        </p>
+        <form
+          className="new-branch"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void drawPart();
+          }}
+        >
+          <input
+            value={part}
+            placeholder="The AI chatbot"
+            aria-label="Part of the app to add"
+            disabled={!!running}
+            onChange={(e) => setPart(e.target.value)}
+          />
+          <button type="submit" className="button" disabled={!active || !part.trim() || !!running}>
+            <Icon name="sparkle" size={14} /> Draw it
+          </button>
+        </form>
         {error && (
           <p className="inspector-error" role="alert">
             {error}

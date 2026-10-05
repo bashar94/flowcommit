@@ -71,12 +71,17 @@ npx flowcommit
 draws the flow it finds: the screens, the server work, the data and the decisions. This can
 take a few minutes on a big project.
 
+- Each part of the app (an area people use, an API, a background job, an AI feature) becomes
+  a **group**. In a big app the groups start folded, so you see all the parts at a glance;
+  click one to open it.
 - Steps the code already does are marked **Built**, and linked to the files that do them.
 - Steps the code only partly does (a stub, a TODO) are left unbuilt, with what's missing in
   their instructions.
 
-**3. Check the flow.** It's a first draft. Fix titles, merge steps that are really one, add
-anything it missed, and group big parts of the app (select steps and press ⌘G).
+**3. Check the flow.** It's a first draft. Fix titles and merge steps that are really one. If
+a part of the app is missing, open **Sync**, type it under **Add a part that's missing** (like
+"the AI chatbot"), and click **Draw it**: AI reads that part's code and adds it as a new group,
+joined to the steps it connects to, without changing the rest of your flow.
 
 **4. Save a version.** From now on, you change the app by changing the flowchart.
 

@@ -8,6 +8,7 @@ import {
   DraftFlowSchema,
   DraftRequestSchema,
   ImportedFlowSchema,
+  ImportedPartSchema,
   FLOW_DIR,
   FLOW_FILE,
   PROVIDER_IDS,
@@ -24,7 +25,7 @@ import { Project } from "./project.ts";
 import { History, HttpError } from "./history.ts";
 import { git } from "./git.ts";
 import { ask, askInProject, cleanText, extractJson, providerStatus } from "./ai.ts";
-import { DRAFT_SYSTEM, IMPORT_SYSTEM, WRITE_SYSTEM, draftPrompt, importPrompt, writePrompt } from "./prompts.ts";
+import { DRAFT_SYSTEM, IMPORT_SYSTEM, WRITE_SYSTEM, draftPrompt, importPartPrompt, importPrompt, writePrompt } from "./prompts.ts";
 import {
   addAgentsInstructions,
   addClaudeHook,
@@ -369,11 +370,41 @@ app.post("/api/ai/import", async (req, res) => {
   const parsed = ImportedFlowSchema.safeParse(extractJson(reply));
   if (!parsed.success) throw new HttpError(502, "The AI drew a flowchart FlowCommit couldn't read. Try again.");
   const ids = new Set(parsed.data.steps.map((s) => s.id));
+  const partIds = new Set(parsed.data.parts.map((p) => p.id));
   const steps = await Promise.all(
-    parsed.data.steps.map(async (s) => ({ ...s, files: await existingFiles(s.files) })),
+    parsed.data.steps.map(async (s) => ({
+      ...s,
+      part: partIds.has(s.part) ? s.part : "",
+      files: await existingFiles(s.files),
+    })),
   );
   const arrows = parsed.data.arrows.filter((a) => ids.has(a.from) && ids.has(a.to) && a.from !== a.to);
-  res.json({ ...parsed.data, steps, arrows });
+  // A part with no steps isn't worth a group.
+  const parts = parsed.data.parts.filter((p) => steps.some((s) => s.part === p.id));
+  res.json({ ...parsed.data, parts, steps, arrows });
+});
+
+/** Reads one part of the app (like "the AI chatbot") and draws it, to add to the current flow. */
+app.post("/api/ai/import-part", async (req, res) => {
+  const provider = z.enum(PROVIDER_IDS).parse(req.body?.provider);
+  const part = String(req.body?.part ?? "").trim().slice(0, 500);
+  if (!part) throw new HttpError(400, "Say which part of the app to draw, like \"the AI chatbot\".");
+  const flow = await project.readFlow();
+  const existing = flow.nodes.map((n) => ({ id: n.id, title: n.title, codeRef: n.codeRef }));
+  const reply = await askInProject(provider, IMPORT_SYSTEM, importPartPrompt(part, existing), project.root, abortOnClose(res));
+  const parsed = ImportedPartSchema.safeParse(extractJson(reply));
+  if (!parsed.success) throw new HttpError(502, "The AI drew that part in a way FlowCommit couldn't read. Try again.");
+  // New ids must not clash with steps already in the flow.
+  const taken = new Set(flow.nodes.map((n) => n.id));
+  const fresh = parsed.data.steps.filter((s) => !taken.has(s.id));
+  const ids = new Set(fresh.map((s) => s.id));
+  const steps = await Promise.all(fresh.map(async (s) => ({ ...s, files: await existingFiles(s.files) })));
+  const arrows = parsed.data.arrows.filter((a) => ids.has(a.from) && ids.has(a.to) && a.from !== a.to);
+  const connect = parsed.data.connect.filter(
+    (c) => (taken.has(c.from) && ids.has(c.to)) || (ids.has(c.from) && taken.has(c.to)),
+  );
+  if (!steps.length) throw new HttpError(502, "The AI didn't find new steps for that part. Try describing it differently.");
+  res.json({ ...parsed.data, steps, arrows, connect });
 });
 
 /** Keeps the paths that are real files inside the project, written relative to it. */

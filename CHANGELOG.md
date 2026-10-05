@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Drawing a flow from code covers every part of the app.** The AI first lists all the parts
+  (areas people use, APIs, background jobs, AI features) and draws each as a group; in a big
+  app the groups start folded, so the whole app reads at a glance. Before, it drew only the
+  main path and could leave out whole features.
+- **Add a part that's missing:** in Sync, name a part (like "the AI chatbot") and AI draws it
+  from the code as a new group, joined to the steps it connects to, without changing the rest.
+
 ## 0.2.0
 
 - **Developer details on steps:** where a step is in the code (route, endpoint, table or

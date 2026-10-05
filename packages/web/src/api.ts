@@ -3,6 +3,7 @@ import type {
   DiffStats,
   DraftFlow,
   ImportedFlow,
+  ImportedPart,
   SecretReport,
   PluginsInfo,
   Template as PluginTemplate,
@@ -198,6 +199,9 @@ export const api = {
 
   aiImport: (provider: ProviderId, signal?: AbortSignal) =>
     request<ImportedFlow>("/api/ai/import", { ...json({ provider }), signal }),
+
+  aiImportPart: (provider: ProviderId, part: string, signal?: AbortSignal) =>
+    request<ImportedPart>("/api/ai/import-part", { ...json({ provider, part }), signal }),
 
   markImported: (body: { steps?: { stepId: string; spec: StepSpec; files: string[] }[]; remove?: string[]; source?: string }) =>
     request<{ status: BuildStatus }>("/api/build/imported", json(body)),

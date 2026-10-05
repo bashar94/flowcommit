@@ -57,26 +57,45 @@ export type DraftFlow = z.infer<typeof DraftFlowSchema>;
  * A flow drawn from code that already exists. Each step lists the files that do it, so
  * FlowCommit can count those steps as built and notice when that code changes later.
  */
+export const ImportedStepSchema = z.object({
+  id: z.string(),
+  kind: z.enum(NODE_KINDS),
+  title: z.string(),
+  instructions: z.string().default(""),
+  files: z.array(z.string()).default([]),
+  /** Where it is in the code: a route, an endpoint, a table, a function. */
+  codeRef: z.string().default(""),
+  uses: z.array(z.string()).default([]),
+  /** The id of the part of the app it belongs to, from `parts`. */
+  part: z.string().default(""),
+  /** False when the code only partly does this step, like a stub or a TODO. */
+  done: z.boolean().default(true),
+});
+export type ImportedStep = z.infer<typeof ImportedStepSchema>;
+
 export const ImportedFlowSchema = DraftFlowSchema.extend({
   description: z.string().default(""),
   /** What the app is built with, like ["Next.js", "Postgres", "Stripe"]. */
   stack: z.array(z.string()).default([]),
-  steps: z
-    .array(
-      z.object({
-        id: z.string(),
-        kind: z.enum(NODE_KINDS),
-        title: z.string(),
-        instructions: z.string().default(""),
-        files: z.array(z.string()).default([]),
-        /** Where it is in the code: a route, an endpoint, a table, a function. */
-        codeRef: z.string().default(""),
-        uses: z.array(z.string()).default([]),
-        /** False when the code only partly does this step, like a stub or a TODO. */
-        done: z.boolean().default(true),
-      }),
-    )
-    .min(2)
-    .max(40),
+  /** The app's parts (features and subsystems), each drawn as a group. */
+  parts: z.array(z.object({ id: z.string(), title: z.string() })).default([]),
+  steps: z.array(ImportedStepSchema).min(2).max(80),
 });
 export type ImportedFlow = z.infer<typeof ImportedFlowSchema>;
+
+/**
+ * One part of an app drawn from its code, to add to a flow that already exists. `connect` joins
+ * it to the existing steps it starts from or leads back to.
+ */
+export const ImportedPartSchema = z.object({
+  title: z.string(),
+  steps: z.array(ImportedStepSchema.omit({ part: true })).min(1).max(30),
+  arrows: z.array(z.object({ from: z.string(), to: z.string(), label: z.string().default("") })).default([]),
+  connect: z
+    .array(z.object({ from: z.string(), to: z.string(), label: z.string().default("") }))
+    .default([])
+    .describe("Arrows between an existing step's id and a new step's id, either way round."),
+  /** Services this part uses that the app's stack doesn't list yet. */
+  stack: z.array(z.string()).default([]),
+});
+export type ImportedPart = z.infer<typeof ImportedPartSchema>;
