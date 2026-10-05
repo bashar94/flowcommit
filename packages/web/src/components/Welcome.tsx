@@ -26,7 +26,9 @@ const EXAMPLES = [
 export function Welcome({ initialDescription, onDraft, onImport, onTemplate, onBlank }: Props) {
   const { active, providers } = useAi();
   const [description, setDescription] = useState(initialDescription);
-  const [fromCode, setFromCode] = useState(false);
+  // Whether the folder already has code, which decides what the welcome offers first.
+  // Unknown until the server answers; nothing is shown before then, so it doesn't flicker.
+  const [fromCode, setFromCode] = useState<boolean | null>(null);
   const [running, setRunning] = useState<{ controller: AbortController; startedAt: number; what: "draft" | "import" } | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState("");
@@ -36,11 +38,11 @@ export function Welcome({ initialDescription, onDraft, onImport, onTemplate, onB
     api
       .project()
       .then((p) => setFromCode(p.hasCode))
-      .catch(() => {});
+      .catch(() => setFromCode(false));
   }, []);
 
   useEffect(() => {
-    if (!fromCode) textRef.current?.focus();
+    if (fromCode === false) textRef.current?.focus();
   }, [fromCode]);
 
   // Templates added by plugins, like your own folder of templates or a marketplace.
@@ -120,6 +122,8 @@ export function Welcome({ initialDescription, onDraft, onImport, onTemplate, onB
       </button>
     </>
   );
+
+  if (fromCode === null) return <div className="welcome" aria-busy="true" />;
 
   if (fromCode) {
     return (

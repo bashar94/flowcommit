@@ -19,13 +19,21 @@ test.beforeEach(async ({ page, request }) => {
   await page.addInitScript(() => localStorage.setItem("flowcommit.tips-seen", "1"));
 });
 
-async function openWithTemplate(page: Page) {
+async function openWithTemplate(page: Page, opts: { hasCode: boolean }) {
+  // A slow answer about the folder (as on a busy CI machine) must not make the welcome flicker.
+  await page.route("**/api/project", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await route.continue();
+  });
   await page.goto("/");
-  // A folder with code first offers to draw the flow from it; templates are one click away.
   const template = page.getByRole("button", { name: /Online store checkout/ });
   const describe = page.getByRole("button", { name: "Describe a new app instead" });
-  await expect(template.or(describe)).toBeVisible();
-  if (await describe.isVisible()) await describe.click();
+  await expect(page.locator(".welcome-card")).toBeVisible();
+  if (opts.hasCode) {
+    // The first thing shown in a folder with code is the offer to draw the flow from it.
+    expect(await template.isVisible()).toBe(false);
+    await describe.click();
+  }
   await template.click();
   await expect(page.locator(".react-flow__node-step")).toHaveCount(9);
 }
@@ -41,7 +49,7 @@ test("saving code with a key in it stops, and the file can be left out", async (
   await mkdir(path.join(projectDir, "src"), { recursive: true });
   await writeFile(path.join(projectDir, "src", "ai.js"), `const client = new OpenAI({ apiKey: "${fakeKey()}" });\n`);
   await writeFile(path.join(projectDir, "src", "app.js"), "export const app = true;\n");
-  await openWithTemplate(page);
+  await openWithTemplate(page, { hasCode: true });
   await saveVersion(page, "Store with code");
 
   const check = page.getByRole("dialog", { name: "Possible passwords or keys" });
@@ -58,7 +66,7 @@ test("saving code with a key in it stops, and the file can be left out", async (
 
 test("a .env file can be kept out of Git", async ({ page }) => {
   await writeFile(path.join(projectDir, ".env"), "PORT=3000\n");
-  await openWithTemplate(page);
+  await openWithTemplate(page, { hasCode: true });
   await saveVersion(page, "With settings");
 
   const check = page.getByRole("dialog", { name: "Possible passwords or keys" });
@@ -70,7 +78,7 @@ test("a .env file can be kept out of Git", async ({ page }) => {
 });
 
 test("a key pasted into a step's instructions is caught too", async ({ page }) => {
-  await openWithTemplate(page);
+  await openWithTemplate(page, { hasCode: false });
   await page.locator(".react-flow__node-step").filter({ hasText: "Charge the card" }).click();
   await page.getByRole("textbox", { name: /Instructions for the AI builder/ }).fill(`Use this key: ${fakeKey()}`);
   await saveVersion(page, "Payment details");
