@@ -27,6 +27,9 @@ export function useUndo(current: Snapshot, ready: boolean, apply: (s: Snapshot) 
   const past = useRef<Snapshot[]>([]);
   const future = useRef<Snapshot[]>([]);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Set when the next change is an automatic follow-up (like laying cards out once they're
+  // measured), which belongs to the step before it rather than being a step of its own.
+  const amendNext = useRef(false);
   // Only drives whether the buttons are enabled.
   const [, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
@@ -39,7 +42,15 @@ export function useUndo(current: Snapshot, ready: boolean, apply: (s: Snapshot) 
       committed.current = { snapshot, text };
       return;
     }
-    if (text === committed.current.text) return;
+    if (text === committed.current.text) {
+      amendNext.current = false; // the follow-up changed nothing
+      return;
+    }
+    if (amendNext.current) {
+      amendNext.current = false;
+      committed.current = { snapshot, text };
+      return;
+    }
     past.current = [...past.current.slice(-(MAX_STEPS - 1)), committed.current.snapshot];
     future.current = [];
     committed.current = { snapshot, text };
@@ -69,6 +80,11 @@ export function useUndo(current: Snapshot, ready: boolean, apply: (s: Snapshot) 
   return {
     undo: useCallback(() => move(past, future), [move]),
     redo: useCallback(() => move(future, past), [move]),
+    /** The next change joins the previous undo step instead of starting a new one. */
+    amend: useCallback(() => {
+      settle(); // anything still settling is its own step first
+      amendNext.current = true;
+    }, [settle]),
     canUndo: past.current.length > 0,
     canRedo: future.current.length > 0,
     /** Starts a fresh history, e.g. after loading another branch or project. */

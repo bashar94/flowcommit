@@ -7,6 +7,8 @@
   and installed copies tell Claude Code to start FlowCommit with `npx flowcommit`.
 - The welcome screen no longer flickers in folders that already have code.
 - The README and quick start now begin with `npx flowcommit`.
+- Undo after starting from a template or a drafted flow: the automatic tidy-up is no longer
+  a separate step, so one ⌘Z goes back, and a quick edit right after can always be undone.
 
 ## 0.1.0, first public release
 

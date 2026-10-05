@@ -196,10 +196,13 @@ export function App() {
   // A drafted or template flow is laid out again once its cards are drawn, because only then
   // are their real sizes known. Then the view zooms to show all of it.
   const arrangeWhenReady = useRef(false);
+  // Set once the undo history exists below.
+  const amendUndo = useRef<() => void>(() => {});
   const allMeasured = nodes.length > 0 && nodes.every((n) => n.measured?.width);
   useEffect(() => {
     if (!allMeasured || !arrangeWhenReady.current) return;
     arrangeWhenReady.current = false;
+    amendUndo.current(); // tidying up the new flow isn't a separate step to undo
     const next = arrange(nodes, edges);
     setNodes(next.nodes);
     setEdges(next.edges);
@@ -816,6 +819,7 @@ export function App() {
     setEdges(snapshot.edges);
   });
   resetUndo.current = undo.reset;
+  amendUndo.current = undo.amend;
 
   // ----- Copy, cut, paste, duplicate and search -----
 
