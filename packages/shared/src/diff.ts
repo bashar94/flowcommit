@@ -1,7 +1,7 @@
 import { serializeAttachment, type Attachment, type FlowEdge, type FlowFile, type FlowNode } from "./flow.ts";
 
 /** Design fields of a step. Position is tracked separately because moving a card isn't a design change. */
-export const NODE_FIELDS = ["kind", "title", "instructions", "attachments", "tags"] as const;
+export const NODE_FIELDS = ["kind", "title", "instructions", "attachments", "tags", "codeRef", "uses", "rules"] as const;
 export type NodeField = (typeof NODE_FIELDS)[number];
 
 export type NodeDiff =
@@ -33,6 +33,8 @@ export type FlowDiff = {
     description?: { before: string; after: string };
     /** Each group as "Title: step, step", so renaming a group or moving steps between groups shows up. */
     groups?: { before: string[]; after: string[] };
+    stack?: { before: string[]; after: string[] };
+    rules?: { before: string[]; after: string[] };
   };
   nodes: NodeDiff[];
   edges: EdgeDiff[];
@@ -63,12 +65,13 @@ export function diffFlows(before: FlowFile | null, after: FlowFile): FlowDiff {
       nodes.push({ status: "added", id, after: a });
       continue;
     }
+    const list = (v: string[] | undefined) => (v ?? []).join("\n");
     const fields = NODE_FIELDS.filter((f) =>
       f === "attachments"
         ? !sameAttachments(b.attachments, a.attachments)
-        : f === "tags"
-          ? b.tags.join("\n") !== a.tags.join("\n")
-          : b[f] !== a[f],
+        : f === "tags" || f === "uses" || f === "rules"
+          ? list(b[f]) !== list(a[f])
+          : (b[f] ?? "") !== (a[f] ?? ""),
     );
     const moved = !samePosition(b, a);
     nodes.push(
@@ -98,6 +101,12 @@ export function diffFlows(before: FlowFile | null, after: FlowFile): FlowDiff {
   if (before && before.name !== after.name) meta.name = { before: before.name, after: after.name };
   if ((before?.description ?? "") !== after.description) {
     meta.description = { before: before?.description ?? "", after: after.description };
+  }
+
+  for (const key of ["stack", "rules"] as const) {
+    const b = before?.[key] ?? [];
+    const a = after[key] ?? [];
+    if (b.join("\n") !== a.join("\n")) meta[key] = { before: b, after: a };
   }
 
   const before_ = groupSummary(before);

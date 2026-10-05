@@ -57,8 +57,9 @@ const INSTRUCTIONS = `FlowCommit holds the design of this app as a flowchart. Ea
 Design → code:
 1. Call get_flow once to understand the whole app, and get_design_changes to see what's new since the last build.
 2. Call next_step to get the next step to build, with its full instructions and images.
-3. Call start_step, build that step in the codebase, then call finish_step with a short summary and every file you changed.
+3. Call start_step, build that step in the codebase, then call finish_step with a short summary, every file you changed, where the step is in the code (code_ref) and the services it uses.
 4. If the instructions are unclear or contradict each other, don't guess: call report_problem with a clear question, and move on to another step.
+   Use the app's stack, and treat a step's rules (and the app's rules) as requirements. If a rule can't be met, call report_problem instead of working around it.
 5. Steps removed from the design still have code. Remove it, then call confirm_removed.
 
 Code → design:
@@ -150,9 +151,16 @@ async function describeStep(flow: FlowFile, status: BuildStatus, node: FlowNode)
     `- Status: ${VIEW_LABEL[view]}`,
   ];
   if (node.tags.length) lines.push(`- Tags: ${node.tags.join(", ")}`);
+  if (node.codeRef) lines.push(`- In the code: ${node.codeRef}`);
+  if (node.uses?.length) lines.push(`- Uses: ${node.uses.join(", ")}`);
+  if (flow.stack?.length) lines.push(`- The app is built with: ${flow.stack.join(", ")}`);
   if (incoming.length) lines.push(`- Comes after: ${incoming.map((e) => arrow(e.source, e.label)).join("; ")}`);
   if (outgoing.length) lines.push(`- Leads to: ${outgoing.map((e) => arrow(e.target, e.label)).join("; ")}`);
   lines.push("", "## Instructions", node.instructions.trim() || "(No instructions. Build what the title and the flow around it imply.)");
+  const rules = [...(node.rules ?? []), ...(flow.rules ?? [])].filter((r) => r.trim());
+  if (rules.length) {
+    lines.push("", "## Rules the code must follow (requirements, not suggestions)", ...rules.map((r) => `- ${r}`));
+  }
 
   if (view === "outdated" && record?.builtSpec) {
     const before = record.builtSpec;
@@ -177,6 +185,16 @@ async function describeStep(flow: FlowFile, status: BuildStatus, node: FlowNode)
       lines.push(`- The marks on ${remarked.length === 1 ? "an image" : `${remarked.length} images`} changed. The current notes are under Attachments.`);
     }
     if (removed.length) lines.push(`- Removed attachments: ${removed.map((a) => a.caption || a.src).join("; ")}`);
+    if ((before.codeRef ?? "") !== (node.codeRef ?? "")) lines.push(`- In the code: was "${before.codeRef ?? ""}", now "${node.codeRef ?? ""}"`);
+    const listChange = (label: string, was: string[] = [], now: string[] = []) => {
+      const add = now.filter((x) => !was.includes(x));
+      const drop = was.filter((x) => !now.includes(x));
+      if (add.length || drop.length) {
+        lines.push(`- ${label}: ${[add.length ? `added ${add.join(", ")}` : "", drop.length ? `removed ${drop.join(", ")}` : ""].filter(Boolean).join("; ")}`);
+      }
+    };
+    listChange("Uses", before.uses, node.uses);
+    listChange("Rules", before.rules, node.rules);
     if (record.files.length) lines.push(`- Files you changed last time: ${record.files.join(", ")}`);
   } else if (record?.note) {
     lines.push("", view === "blocked" ? "## Open question" : "## Last build", record.note);
@@ -226,6 +244,8 @@ server.registerTool(
     const lines = [
       `# ${flow.name || "Untitled app"}`,
       flow.description || "(No description.)",
+      ...(flow.stack?.length ? ["", `Built with: ${flow.stack.join(", ")}. Use these; ask before adding another framework or service.`] : []),
+      ...(flow.rules?.length ? ["", "Rules every step must follow:", ...flow.rules.map((r) => `- ${r}`)] : []),
       "",
       `Build progress: ${progress.built} of ${progress.total} steps built.`,
       "",
@@ -242,7 +262,7 @@ server.registerTool(
       "## Steps, in reading order",
       ...plan.map(
         (p, i) =>
-          `${i + 1}. [${p.node.id}] ${NODE_KIND_INFO[p.node.kind].label}: ${p.node.title || "Untitled"}${groupNote(flow, p.node.group)}${p.node.tags.length ? ` #${p.node.tags.join(" #")}` : ""} — ${VIEW_LABEL[p.view]}`,
+          `${i + 1}. [${p.node.id}] ${NODE_KIND_INFO[p.node.kind].label}: ${p.node.title || "Untitled"}${groupNote(flow, p.node.group)}${p.node.codeRef ? ` \`${p.node.codeRef}\`` : ""}${p.node.uses?.length ? ` (uses ${p.node.uses.join(", ")})` : ""}${p.node.tags.length ? ` #${p.node.tags.join(" #")}` : ""} — ${VIEW_LABEL[p.view]}`,
       ),
       "",
       "## Arrows",
@@ -341,9 +361,14 @@ server.registerTool(
       step_id: z.string(),
       summary: z.string().describe("One or two sentences, in plain language, on what you built."),
       files: z.array(z.string()).default([]).describe("Paths of the files you created or changed, relative to the project."),
+      code_ref: z
+        .string()
+        .optional()
+        .describe('Where the step now is in the code, briefly: a route ("/cart"), an endpoint ("POST /api/checkout"), a table ("orders"), or a function.'),
+      uses: z.array(z.string()).optional().describe('Services and main libraries this step uses, like ["Stripe", "Zod"].'),
     },
   },
-  async ({ step_id, summary, files }) => {
+  async ({ step_id, summary, files, code_ref, uses }) => {
     const { flow } = await load();
     const node = flow.nodes.find((n) => n.id === step_id);
     if (!node) return fail(`There's no step with id ${step_id}.`);
@@ -358,6 +383,8 @@ server.registerTool(
       agent: agentName(),
       updatedAt: new Date().toISOString(),
       builtSpec: specOf(node),
+      ...(code_ref ? { codeRef: code_ref.slice(0, 120) } : {}),
+      ...(uses?.length ? { uses: uses.slice(0, 12) } : {}),
     }));
     const progress = buildProgress(flow, status);
     const leaks = await secretsIn(files);

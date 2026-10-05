@@ -38,6 +38,20 @@
         "description": "A named part of the flow, like \"Checkout\". Its steps are the ones whose group is this id."
       }
     },
+    "stack": {
+      "description": "What the app is built with, like \"Next.js\", \"Postgres\", \"Stripe\".",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "rules": {
+      "description": "Requirements every step must follow.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "nodes": {
       "type": "array",
       "items": {
@@ -181,6 +195,24 @@
           "group": {
             "description": "The id of the group this step is in, if any.",
             "type": "string"
+          },
+          "codeRef": {
+            "description": "Where the step is in the code: a screen's route, an API's method and path, a table's name, a function.",
+            "type": "string"
+          },
+          "uses": {
+            "description": "Services and libraries the step uses, like \"Stripe\" or \"Supabase\".",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rules": {
+            "description": "Requirements the code must follow, like \"Never store card numbers\".",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "position": {
             "type": "object",

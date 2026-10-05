@@ -109,8 +109,9 @@ Reply with JSON in exactly this shape:
 {
   "name": "Short app name",
   "description": "One or two sentences on what the app is and who it's for.",
+  "stack": ["Next.js", "Postgres", "Stripe"],
   "steps": [
-    { "id": "s1", "kind": "start", "title": "User opens the app", "instructions": "...", "files": ["src/main.ts"], "done": true }
+    { "id": "s1", "kind": "start", "title": "User opens the app", "instructions": "...", "files": ["src/main.ts"], "codeRef": "/", "uses": [], "done": true }
   ],
   "arrows": [
     { "from": "s1", "to": "s2", "label": "" }
@@ -125,6 +126,9 @@ Rules:
 - Titles are 2 to 6 words, in plain language a non-programmer understands.
 - Instructions are 1 to 3 sentences describing what this step does in the code today, specific enough that an AI coding agent could rebuild or change it. Mention notable libraries or services by name.
 - "files" lists the 1 to 5 source files that do this step, as paths relative to the current folder. Use [] for steps with no code of their own, like the start.
+- "stack" lists the main language or framework, database, and outside services (3 to 8 names, as people write them, like "Next.js" or "Stripe").
+- "codeRef" says briefly where the step is in the code: a screen's route ("/cart"), an API's method and path ("POST /api/checkout"), a table's name and key fields ("orders (id, total, status)"), or a function ("sendReceiptEmail()"). Use "" when there's nothing specific.
+- "uses" lists the services and main libraries the step depends on, like ["Stripe", "Zod"]. Use [] when it's plain code.
 - "done" is false when the code only partly does the step (a stub, a TODO, a missing piece); say what's missing in the instructions.
 - Every arrow connects ids that exist in "steps".`;
 }

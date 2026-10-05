@@ -19,6 +19,10 @@ export const StepSpecSchema = z.object({
   instructions: z.string(),
   attachments: z.array(AttachmentSchema),
   tags: z.array(z.string()).default([]),
+  // Only present when set, so steps built before these existed still count as built.
+  codeRef: z.string().optional(),
+  uses: z.array(z.string()).optional(),
+  rules: z.array(z.string()).optional(),
 });
 export type StepSpec = z.infer<typeof StepSpecSchema>;
 
@@ -33,6 +37,9 @@ export const StepBuildSchema = z.object({
   updatedAt: z.string(),
   /** The step's design when it was last built, to spot later edits. */
   builtSpec: StepSpecSchema.nullable().default(null),
+  /** What the builder reported creating, shown on the card until the person writes their own. */
+  codeRef: z.string().optional(),
+  uses: z.array(z.string()).optional(),
 });
 export type StepBuild = z.infer<typeof StepBuildSchema>;
 
@@ -47,13 +54,19 @@ export const emptyBuildStatus = (): BuildStatus => ({ schema: 1, steps: {} });
 /** What a step's card shows. "outdated" means it was built, then its design changed. */
 export type BuildView = "todo" | "building" | "built" | "outdated" | "blocked";
 
-export function specOf(n: Pick<FlowNode, "kind" | "title" | "instructions" | "attachments" | "tags">): StepSpec {
+/** What a step asks the builder for. Changing any of it means the step needs building again. */
+export function specOf(
+  n: Pick<FlowNode, "kind" | "title" | "instructions" | "attachments" | "tags" | "codeRef" | "uses" | "rules">,
+): StepSpec {
   return {
     kind: n.kind,
     title: n.title,
     instructions: n.instructions,
     attachments: n.attachments.map(serializeAttachment),
     tags: n.tags,
+    ...(n.codeRef ? { codeRef: n.codeRef } : {}),
+    ...(n.uses?.length ? { uses: n.uses } : {}),
+    ...(n.rules?.length ? { rules: n.rules } : {}),
   };
 }
 

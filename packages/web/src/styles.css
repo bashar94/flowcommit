@@ -2633,6 +2633,7 @@ button.change-row:hover {
 .app[data-hide~="media"] .step-screen,
 .app[data-hide~="media"] .step-media,
 .app[data-hide~="tags"] .step-tags,
+.app[data-hide~="dev"] .step-dev,
 .app[data-hide~="build"] .step-build,
 .app[data-hide~="build"] .step-question,
 .app[data-hide~="arrows"] .react-flow__edge-textwrapper,
@@ -4739,4 +4740,97 @@ button.change-row:hover {
   .topbar .wide-only {
     display: none;
   }
+}
+
+/* ---------- Developer details: one quiet line under the title ---------- */
+
+.step-dev {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 0 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.step-dev code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+.step-uses {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 16px;
+}
+
+.dev-details {
+  display: grid;
+  gap: 12px;
+}
+
+/* In the app details, it follows other fields, so it gets a divider. */
+.inspector-section .field + .dev-details,
+.inspector-section .ai-field + .dev-details {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.dev-details > summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.input-code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+}
+
+.list-change {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.list-change li {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12.5px;
+}
+
+.list-change [data-status="added"] {
+  background: var(--add-soft);
+  color: var(--add);
+}
+
+.list-change [data-status="removed"] {
+  background: var(--del-soft);
+  color: var(--del);
+}
+
+.list-change ins,
+.list-change del {
+  text-decoration: none;
+}
+
+.list-change del {
+  text-decoration: line-through;
 }

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useId, useRef, useState, type ClipboardEvent } from "react";
-import { NODE_KINDS, NODE_KIND_INFO, type Attachment, type FlowGroup, type WriteRequest } from "@flowcommit/shared";
+import { NODE_KINDS, NODE_KIND_INFO, type Attachment, type FlowGroup, type NodeKind, type WriteRequest } from "@flowcommit/shared";
 import { api } from "../api.ts";
 import { assetUrl, newId, type ArrowEdge, type FlowMeta, type StepData, type StepNode } from "../model.ts";
 import { Icon } from "../icons.tsx";
@@ -24,6 +24,7 @@ type Props = {
   stepCount: number;
   /** Every tag used anywhere in the flow, offered as suggestions. */
   allTags: string[];
+  services: string[];
   /** Changes whenever a new step should get its title focused, so the user can type straight away. */
   focusTitleKey: number;
   onMetaChange: (patch: Partial<FlowMeta>) => void;
@@ -54,6 +55,7 @@ export function Inspector(props: Props) {
           onResetBuild={() => props.onResetBuild(selection.node.id)}
           allTags={props.allTags}
           groups={meta.groups}
+          services={props.services}
         />
       )}
       {selection.type === "edge" && (
@@ -121,6 +123,17 @@ function FlowDetails({
           hint="The AI builder reads this before every step."
           onChange={(description) => onChange({ description })}
         />
+        <details className="dev-details" open={meta.stack.length > 0 || meta.rules.length > 0}>
+          <summary>For developers</summary>
+          <TagInput
+            label="Built with"
+            placeholder="Next.js, Postgres, Stripe…"
+            tags={meta.stack}
+            suggestions={[]}
+            onChange={(stack) => onChange({ stack })}
+          />
+          <RulesField label="Rules for the whole app" rules={meta.rules} onChange={(rules) => onChange({ rules })} />
+        </details>
       </div>
       <div className="inspector-section">
         <h2 className="inspector-title">Shortcuts</h2>
@@ -160,9 +173,12 @@ function NodeDetails({
   onResetBuild,
   allTags,
   groups,
+  services,
 }: {
   allTags: string[];
   groups: FlowGroup[];
+  /** The app's stack and every service steps use, offered as suggestions. */
+  services: string[];
   build?: StepBuildInfo;
   onResetBuild: () => void;
   node: StepNode;
@@ -421,6 +437,10 @@ function NodeDetails({
         )}
       </div>
 
+      <div className="inspector-section">
+        <DevDetails data={data} build={build} services={services} onChange={onChange} />
+      </div>
+
       {build && build.view !== "todo" && (
         <BuildSection build={build} instructions={data.instructions} onReset={onResetBuild} />
       )}
@@ -583,15 +603,98 @@ function BuildFiles({ files }: { files: string[] }) {
   );
 }
 
+/** What a developer looks for first, by type of step. */
+const CODE_REF: Record<NodeKind, { label: string; example: string }> = {
+  start: { label: "In the code", example: "/" },
+  step: { label: "In the code", example: "sendReceiptEmail()" },
+  decision: { label: "Condition", example: "payment.status === \"paid\"" },
+  screen: { label: "Route", example: "/cart" },
+  api: { label: "Endpoint", example: "POST /api/checkout" },
+  data: { label: "Table", example: "orders (id, total, status)" },
+  end: { label: "In the code", example: "/thank-you" },
+};
+
+/**
+ * Where the step is in the code, what it uses, and rules the code must follow. Folded away
+ * until it has something in it, so the panel stays simple for people who don't need it.
+ */
+function DevDetails({
+  data,
+  build,
+  services,
+  onChange,
+}: {
+  data: StepData;
+  build?: StepBuildInfo;
+  services: string[];
+  onChange: (patch: Partial<StepData>) => void;
+}) {
+  const ref = CODE_REF[data.kind];
+  const reported = build?.record;
+  const filled = !!data.codeRef || !!data.uses?.length || !!data.rules?.length;
+  return (
+    <details className="dev-details" open={filled}>
+      <summary>For developers</summary>
+      <label className="field">
+        <span>{ref.label}</span>
+        <input
+          className="input-code"
+          value={data.codeRef ?? ""}
+          placeholder={reported?.codeRef ?? ref.example}
+          onChange={(e) => onChange({ codeRef: e.target.value || undefined })}
+        />
+        {reported?.codeRef && !data.codeRef && (
+          <small>{agentLabel(reported.agent)} reported building {reported.codeRef}.</small>
+        )}
+      </label>
+      <TagInput
+        label="Uses"
+        placeholder={reported?.uses?.length ? reported.uses.join(", ") : "Stripe, Supabase…"}
+        tags={data.uses ?? []}
+        suggestions={services}
+        onChange={(uses) => onChange({ uses: uses.length ? uses : undefined })}
+      />
+      <RulesField label="Rules the code must follow" rules={data.rules ?? []} onChange={(rules) => onChange({ rules })} />
+    </details>
+  );
+}
+
+/** One rule per line. The AI treats these as requirements, not suggestions. */
+function RulesField({ label, rules, onChange }: { label: string; rules: string[]; onChange: (rules: string[] | undefined) => void }) {
+  const id = useId();
+  return (
+    <div className="field">
+      <label htmlFor={id}>
+        <span className="field-label">{label}</span>
+      </label>
+      <textarea
+        id={id}
+        rows={3}
+        value={rules.join("\n")}
+        placeholder={"Never store card numbers\nUse Stripe Checkout, not a custom form"}
+        onChange={(e) => {
+          const next = e.target.value.split("\n");
+          onChange(next.some((r) => r.trim()) ? next : undefined);
+        }}
+      />
+      <small>One per line. The AI must follow them.</small>
+    </div>
+  );
+}
+
 /** Tags as removable chips. Type a tag and press Enter (or a comma) to add it. */
 function TagInput({
   tags,
   suggestions,
   onChange,
+  label = "Tags",
+  placeholder = "auth, payment, MVP…",
 }: {
   tags: string[];
   suggestions: string[];
   onChange: (tags: string[]) => void;
+  label?: string;
+  placeholder?: string;
 }) {
   const [draft, setDraft] = useState("");
   const id = useId();
@@ -604,13 +707,13 @@ function TagInput({
   return (
     <div className="field">
       <label htmlFor={id}>
-        <span className="field-label">Tags</span>
+        <span className="field-label">{label}</span>
       </label>
       <div className="tag-input">
         {tags.map((t) => (
           <span key={t} className="tag-chip">
             {t}
-            <button type="button" aria-label={`Remove tag ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))}>
+            <button type="button" aria-label={`Remove ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))}>
               <Icon name="close" size={10} />
             </button>
           </span>
@@ -619,7 +722,7 @@ function TagInput({
           id={id}
           value={draft}
           list={`${id}-list`}
-          placeholder={tags.length ? "" : "auth, payment, MVP…"}
+          placeholder={tags.length ? "" : placeholder}
           onChange={(e) => (e.target.value.endsWith(",") ? add(e.target.value) : setDraft(e.target.value))}
           onKeyDown={(e) => {
             if (e.key === "Enter") {

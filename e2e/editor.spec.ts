@@ -128,6 +128,7 @@ test("a project with code can be drawn from its code, with those steps marked bu
           title,
           instructions: "",
           files: i === 0 || i === steps.length - 1 ? [] : ["src/notes.js"],
+          ...(title === "Notes list" ? { codeRef: "/notes", uses: ["IndexedDB"] } : {}),
           done: title !== "Delete a note",
         })),
         arrows: steps.slice(1).map((_, i) => ({ from: `s${i}`, to: `s${i + 1}`, label: "" })),
@@ -144,7 +145,45 @@ test("a project with code can be drawn from its code, with those steps marked bu
   await page.getByRole("button", { name: "Draw it from my code" }).click();
   await expect(cards(page)).toHaveCount(6);
   await expect(card(page, "Notes list")).toContainText("Built");
+  // What the AI found in the code shows on the card for developers.
+  await expect(card(page, "Notes list").locator(".step-dev")).toHaveText("/notesIndexedDB");
   await expect(card(page, "Delete a note")).not.toContainText("Built");
   // The view zooms out to show every step.
   for (const title of steps) await expect(card(page, title)).toBeInViewport();
+});
+
+test("developer details: one quiet line on the card, hidden in Simple, and searchable", async ({ page }) => {
+  await startFromStoreTemplate(page);
+  const pay = card(page, "Charge the card");
+  await pay.click();
+  await page.getByText("For developers").click();
+  await page.getByRole("textbox", { name: "Endpoint" }).fill("POST /api/checkout");
+  const uses = page.getByRole("combobox", { name: "Uses" }).or(page.getByRole("textbox", { name: "Uses" }));
+  for (const s of ["Stripe", "Postgres", "Zod"]) {
+    await uses.fill(s);
+    await uses.press("Enter");
+  }
+  await page.getByRole("textbox", { name: "Rules the code must follow" }).fill("Charge in the shopper's currency");
+
+  // One line: the endpoint and a service, with the rest counted.
+  const line = pay.locator(".step-dev");
+  await expect(line).toHaveText("POST /api/checkoutStripe+2");
+  await expect(pay).not.toContainText("shopper's currency");
+  await expect.poll(async () => (await flowOnDisk()).nodes.find((n: { title: string }) => n.title === "Charge the card")).toMatchObject({
+    codeRef: "POST /api/checkout",
+    uses: ["Stripe", "Postgres", "Zod"],
+    rules: ["Charge in the shopper's currency"],
+  });
+
+  await page.getByRole("button", { name: /^View/ }).click();
+  await page.getByRole("button", { name: "Simple" }).click();
+  await expect(line).toBeHidden();
+  await page.getByRole("button", { name: "Detailed" }).click();
+  await page.keyboard.press("Escape");
+
+  await page.locator(".react-flow__pane").click({ position: { x: 40, y: 40 } });
+  await page.keyboard.press("ControlOrMeta+f");
+  await page.getByRole("textbox", { name: "Find a step" }).fill("zod");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".react-flow__node.selected")).toContainText("Charge the card");
 });

@@ -20,6 +20,8 @@ export const StepReading = createContext<{
 }>({ numbers: new Map(), focus: null, current: null });
 
 const MAX_THUMBS = 3;
+/** Services shown on the card (fewer next to a code reference); the rest are counted, so it stays one line. */
+const MAX_USES = 2;
 const DIFF_LABEL = { added: "Added", removed: "Removed", changed: "Changed", moved: "Moved" } as const;
 
 /**
@@ -42,6 +44,12 @@ function StepCardImpl({ id, data, selected }: NodeProps<StepNode>) {
   const media = data.attachments.filter((a) => a.kind !== "link" && a !== cover);
   const links = data.attachments.filter((a) => a.kind === "link").length;
   const extra = media.length - MAX_THUMBS;
+  // The developer line: where the step is in the code and what it uses. What the person wrote
+  // wins; otherwise what the AI reported building. Start, end and decisions have no room for it.
+  const codeRef = data.codeRef || (data.diff ? undefined : build?.record?.codeRef);
+  const uses = data.uses?.length ? data.uses : data.diff ? [] : (build?.record?.uses ?? []);
+  const showDev = !isTerminal && !isDecision && (!!codeRef || uses.length > 0);
+  const shownUses = codeRef ? 1 : MAX_USES;
 
   const body = (
     <>
@@ -75,6 +83,18 @@ function StepCardImpl({ id, data, selected }: NodeProps<StepNode>) {
       )}
 
       <p className={data.title ? "step-title" : "step-title is-empty"}>{data.title || "Untitled step"}</p>
+
+      {showDev && (
+        <p className="step-dev" title={[codeRef, uses.length ? `Uses ${uses.join(", ")}` : ""].filter(Boolean).join("\n")}>
+          {codeRef && <code>{codeRef}</code>}
+          {uses.slice(0, shownUses).map((u) => (
+            <span key={u} className="step-uses">
+              {u}
+            </span>
+          ))}
+          {uses.length > shownUses && <span className="step-uses">+{uses.length - shownUses}</span>}
+        </p>
+      )}
 
       {data.tags.length > 0 && (
         <ul className="step-tags">

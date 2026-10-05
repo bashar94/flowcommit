@@ -59,6 +59,8 @@ export type DraftFlow = z.infer<typeof DraftFlowSchema>;
  */
 export const ImportedFlowSchema = DraftFlowSchema.extend({
   description: z.string().default(""),
+  /** What the app is built with, like ["Next.js", "Postgres", "Stripe"]. */
+  stack: z.array(z.string()).default([]),
   steps: z
     .array(
       z.object({
@@ -67,6 +69,9 @@ export const ImportedFlowSchema = DraftFlowSchema.extend({
         title: z.string(),
         instructions: z.string().default(""),
         files: z.array(z.string()).default([]),
+        /** Where it is in the code: a route, an endpoint, a table, a function. */
+        codeRef: z.string().default(""),
+        uses: z.array(z.string()).default([]),
         /** False when the code only partly does this step, like a stub or a TODO. */
         done: z.boolean().default(true),
       }),

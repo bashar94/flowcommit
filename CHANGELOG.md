@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Developer details on steps:** where a step is in the code (route, endpoint, table or
+  function), the services it uses, and rules the code must follow; plus what the app is built
+  with and app-wide rules. One quiet line on the card, hidden in Simple view. Drawing a flow
+  from code fills them in, AI agents report them as they build, rules are passed to agents as
+  requirements, and History shows changes to them. Search finds steps by service.
+
 ## 0.1.1
 
 - **Getting started guide** (`docs/getting-started.md`) for new apps and existing ones.

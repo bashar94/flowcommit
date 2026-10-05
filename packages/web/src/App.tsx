@@ -128,7 +128,7 @@ export function App() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<StepNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ArrowEdge>([]);
-  const [meta, setMeta] = useState<FlowMeta>({ name: "", description: "", groups: [] });
+  const [meta, setMeta] = useState<FlowMeta>({ name: "", description: "", groups: [], stack: [], rules: [] });
   const [load, setLoad] = useState<LoadState>({ status: "loading" });
   const [save, setSave] = useState<SaveState>({ status: "saved" });
   const [mode, setMode] = useState<Mode>("edit");
@@ -624,7 +624,7 @@ export function App() {
         })),
       );
       setEdges(arrows.map((a) => toCanvasEdge(newId("e"), a.source, a.target, a.label)));
-      setMeta((m) => ({ name: flow.name || m.name, description: description || m.description, groups: [] }));
+      setMeta((m) => ({ ...m, name: flow.name || m.name, description: description || m.description, groups: [] }));
       setWelcomeDismissed(true);
       arrangeWhenReady.current = true;
       notify(message, {
@@ -654,13 +654,22 @@ export function App() {
       `${ai?.label ?? "AI"} drew ${flow.steps.length} steps from your code. Check it over, then save a version.`,
       forget,
     );
+    // What the AI found in the code goes on the steps for developers: routes, endpoints, services.
+    const dev = new Map(
+      flow.steps.map((s) => [
+        stepIds.get(s.id)!,
+        { ...(s.codeRef?.trim() ? { codeRef: s.codeRef.trim() } : {}), ...(s.uses?.length ? { uses: s.uses } : {}) },
+      ]),
+    );
+    setNodes((ns) => ns.map((n) => (dev.has(n.id) ? { ...n, data: { ...n.data, ...dev.get(n.id) } } : n)));
+    if (flow.stack?.length) setMeta((m) => ({ ...m, stack: flow.stack }));
     const done = flow.steps.filter((s) => s.done);
     try {
       await api.markImported({
         source: ai?.label ?? "",
         steps: done.map((s) => ({
           stepId: stepIds.get(s.id)!,
-          spec: specOf({ kind: s.kind, title: s.title, instructions: s.instructions, attachments: [], tags: [] }),
+          spec: specOf({ kind: s.kind, title: s.title, instructions: s.instructions, attachments: [], tags: [], ...dev.get(stepIds.get(s.id)!) }),
           files: s.files,
         })),
       });
@@ -1350,6 +1359,7 @@ export function App() {
                   meta={meta}
                   stepCount={nodes.length}
                   allTags={[...new Set(nodes.flatMap((n) => n.data.tags))].sort()}
+                  services={[...new Set([...meta.stack, ...nodes.flatMap((n) => n.data.uses ?? [])])].sort()}
                   focusTitleKey={focusTitleKey}
                   onMetaChange={(patch) => setMeta((m) => ({ ...m, ...patch }))}
                   onNodeChange={updateNode}

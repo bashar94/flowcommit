@@ -33,6 +33,8 @@ the specification for **version 1** of the format.
 | `name` | The app's name. |
 | `description` | What the app is. AI agents read it before building any step. |
 | `groups` | Named parts of the flow, like "Checkout". A step belongs to a group through its `group` field. |
+| `stack` | Optional. What the app is built with, like `["Next.js", "Postgres", "Stripe"]`. |
+| `rules` | Optional. Requirements every step must follow. |
 | `nodes` | The steps. |
 | `edges` | The arrows between steps. |
 
@@ -47,6 +49,9 @@ the specification for **version 1** of the format.
 | `attachments` | Images, videos and links, each with a caption. Images can carry numbered marks (`annotations`) with notes. |
 | `tags` | Short labels like `auth` or `MVP`. |
 | `group` | The id of the group the step is in, if any. |
+| `codeRef` | Optional. Where the step is in the code: a screen's route (`/cart`), an API's method and path (`POST /api/checkout`), a table (`orders (id, total)`), a function. |
+| `uses` | Optional. Services and libraries the step uses, like `["Stripe"]`. |
+| `rules` | Optional. Requirements the step's code must follow. AI agents treat them as hard requirements. |
 | `position` | Where the step sits on the canvas, in pixels. Moving a step isn't a design change. |
 
 Uploaded images and videos live in `.flowcommit/assets/`; `src` is the file name there. For a
@@ -65,7 +70,8 @@ with the marks drawn on, for AI tools.
 ## Rules readers and writers follow
 
 - **Fields with a default can be left out.** `description`, `groups`, `instructions`,
-  `attachments`, `tags` and `label` default to empty. Writers should still include them, so
+  `attachments`, `tags` and `label` default to empty. The optional fields (`stack`, `rules`,
+  `group`, `codeRef`, `uses`) are left out when they're empty. Writers should still include them, so
   every file looks the same.
 - **Unknown fields are ignored** when reading. Don't rely on them surviving a save.
 - **Every arrow points at steps that exist.** A file where they don't is invalid.

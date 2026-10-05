@@ -70,6 +70,12 @@ export const FlowNodeSchema = z
     attachments: z.array(AttachmentSchema).default([]),
     tags: z.array(z.string()).default([]).describe('Short labels, like "auth" or "MVP".'),
     group: z.string().optional().describe("The id of the group this step is in, if any."),
+    codeRef: z
+      .string()
+      .optional()
+      .describe("Where the step is in the code: a screen's route, an API's method and path, a table's name, a function."),
+    uses: z.array(z.string()).optional().describe('Services and libraries the step uses, like "Stripe" or "Supabase".'),
+    rules: z.array(z.string()).optional().describe("Requirements the code must follow, like \"Never store card numbers\"."),
     position: z
       .object({ x: z.number(), y: z.number() })
       .describe("Where the step sits on the canvas, in pixels. Moving a step isn't a design change."),
@@ -105,6 +111,8 @@ export const FlowFileSchema = z
     name: z.string().describe("The app's name."),
     description: z.string().default("").describe("What the app is. AI agents read this before every step."),
     groups: z.array(FlowGroupSchema).default([]),
+    stack: z.array(z.string()).optional().describe('What the app is built with, like "Next.js", "Postgres", "Stripe".'),
+    rules: z.array(z.string()).optional().describe("Requirements every step must follow."),
     nodes: z.array(FlowNodeSchema),
     edges: z.array(FlowEdgeSchema),
   })
@@ -143,6 +151,8 @@ export function serializeFlow(flow: FlowFile): string {
     name: flow.name,
     description: flow.description,
     // Left out when empty, so flows without groups look the same as before groups existed.
+    ...(flow.stack?.length ? { stack: flow.stack } : {}),
+    ...(flow.rules?.length ? { rules: flow.rules } : {}),
     ...(flow.groups.length ? { groups: [...flow.groups].sort(byId).map((g) => ({ id: g.id, title: g.title })) } : {}),
     nodes: [...flow.nodes].sort(byId).map((n) => ({
       id: n.id,
@@ -152,6 +162,9 @@ export function serializeFlow(flow: FlowFile): string {
       attachments: n.attachments.map(serializeAttachment),
       tags: n.tags,
       ...(n.group ? { group: n.group } : {}),
+      ...(n.codeRef ? { codeRef: n.codeRef } : {}),
+      ...(n.uses?.length ? { uses: n.uses } : {}),
+      ...(n.rules?.length ? { rules: n.rules } : {}),
       position: { x: Math.round(n.position.x), y: Math.round(n.position.y) },
     })),
     edges: [...flow.edges].sort(byId).map((e) => ({

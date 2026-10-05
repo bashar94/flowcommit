@@ -31,6 +31,8 @@ read, makes it the spec your AI agent builds from, and keeps both in step:
   and FlowCommit suggests how the flowchart should change, for you to accept or dismiss.
 - **Every version in Git.** Save versions, see what changed on the canvas, review branches
   and pull requests as diagrams, and go back to any version's design and code.
+- **Enough for developers too.** Each step can show its route, endpoint or table, the services
+  it uses, and rules the code must follow, in one quiet line you can turn off.
 - **No new accounts or keys.** It runs on your computer and uses the Claude Code or Codex
   sign-in you already have.
 

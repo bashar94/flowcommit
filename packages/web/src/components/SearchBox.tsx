@@ -11,7 +11,10 @@ type Props = {
   onClose: () => void;
 };
 
-/** Finds steps by title, instructions, tags or type. Matches light up on the canvas as you type. */
+/**
+ * Finds steps by title, instructions, tags, type, or what they use in the code (like "Stripe" or
+ * "/api/checkout"). Matches light up on the canvas as you type.
+ */
 export function SearchBox({ nodes, numbers, onMatches, onPick, onClose }: Props) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -30,7 +33,7 @@ export function SearchBox({ nodes, numbers, onMatches, onPick, onClose }: Props)
           ? 0
           : title.includes(q)
             ? 1
-            : d.tags.some((t) => t.toLowerCase().includes(q))
+            : [...d.tags, ...(d.uses ?? []), d.codeRef ?? ""].some((t) => t.toLowerCase().includes(q))
               ? 2
               : NODE_KIND_INFO[d.kind].label.toLowerCase().includes(q)
                 ? 3

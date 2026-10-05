@@ -70,6 +70,8 @@ function scanFlow(flow: FlowFile, before: FlowFile | null): SecretFinding[] {
     const text = [
       node.title,
       node.instructions,
+      node.codeRef ?? "",
+      ...(node.rules ?? []),
       ...node.attachments.flatMap((a) => [a.caption, a.kind === "link" ? a.src : "", ...a.annotations.map((m) => m.note)]),
     ].join("\n");
     for (const f of scanText(FLOW_PATH, text)) out.push({ ...f, step: { id: node.id, title: node.title || "Untitled step" } });

@@ -153,6 +153,26 @@ FlowCommit doesn't have to be open while the AI builds. If it is, you see each s
 - **Read and explain.** **View → Simple** shows only shapes and titles, with an outline, which
   is the clearest way to explain the app. **Walk through** goes through it step by step.
 
+## Details for developers
+
+Each step can say where it is in the code, what it uses, and rules the code must follow. Open
+**For developers** at the bottom of a step's details:
+
+- **Route, endpoint, table or function**, depending on the type of step: `/cart`,
+  `POST /api/checkout`, `orders (id, total, status)`, `sendReceiptEmail()`.
+- **Uses:** services and libraries, like Stripe or Supabase.
+- **Rules:** one per line, like "Never store card numbers". The AI must follow them, and asks
+  you when it can't.
+
+With no step selected, the same section holds what the whole app is **built with** and rules
+for every step. The card shows one quiet line with the route or endpoint and a service; turn it
+off with **View → Developer details**, or use **Simple**. Search (⌘F) finds steps by what they
+use, so searching "Stripe" lights up every step that touches it.
+
+You rarely need to type these: **Draw it from my code** fills them in, and AI agents report what
+they built as they finish each step. A reviewer sees changes to them in History, like a new
+endpoint or a step that now uses Stripe.
+
 ## Working with GitHub and a team
 
 FlowCommit uses your project's Git repository and your own Git sign-in, so everything also

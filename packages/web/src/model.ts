@@ -13,6 +13,10 @@ export type StepData = {
   tags: string[];
   /** The id of the group this step is in, if any. */
   group?: string;
+  /** For developers: where it is in the code, what it uses, and rules the code must follow. */
+  codeRef?: string;
+  uses?: string[];
+  rules?: string[];
   /** Only set when comparing versions. */
   diff?: DiffMark;
   /** Version whose files this step's attachments come from. Unset means the current draft. */
@@ -23,7 +27,7 @@ export type StepNode = Node<StepData, "step">;
 export type ArrowSide = "left" | "right";
 export type ArrowEdge = Edge<{ label: string }>;
 
-export type FlowMeta = { name: string; description: string; groups: FlowGroup[] };
+export type FlowMeta = { name: string; description: string; groups: FlowGroup[]; stack: string[]; rules: string[] };
 
 export const DEFAULT_EDGE_OPTIONS = {
   type: "smoothstep",
@@ -39,7 +43,7 @@ export function newId(prefix: string): string {
 
 export function toCanvas(flow: FlowFile): { meta: FlowMeta; nodes: StepNode[]; edges: ArrowEdge[] } {
   return {
-    meta: { name: flow.name, description: flow.description, groups: flow.groups },
+    meta: { name: flow.name, description: flow.description, groups: flow.groups, stack: flow.stack ?? [], rules: flow.rules ?? [] },
     nodes: flow.nodes.map((n) => ({
       id: n.id,
       type: "step",
@@ -51,6 +55,9 @@ export function toCanvas(flow: FlowFile): { meta: FlowMeta; nodes: StepNode[]; e
         attachments: n.attachments,
         tags: n.tags,
         ...(n.group ? { group: n.group } : {}),
+        ...(n.codeRef ? { codeRef: n.codeRef } : {}),
+        ...(n.uses?.length ? { uses: n.uses } : {}),
+        ...(n.rules?.length ? { rules: n.rules } : {}),
       },
     })),
     edges: flow.edges.map((e) => toCanvasEdge(e.id, e.source, e.target, e.label, e.sourceHandle)),
@@ -83,6 +90,8 @@ export function fromCanvas(meta: FlowMeta, nodes: StepNode[], edges: ArrowEdge[]
     schema: SCHEMA_VERSION,
     name: meta.name,
     description: meta.description,
+    ...(meta.stack.length ? { stack: meta.stack } : {}),
+    ...(meta.rules.length ? { rules: meta.rules } : {}),
     groups,
     nodes: nodes.map((n) => ({
       id: n.id,
@@ -92,6 +101,9 @@ export function fromCanvas(meta: FlowMeta, nodes: StepNode[], edges: ArrowEdge[]
       attachments: n.data.attachments,
       tags: n.data.tags,
       ...(n.data.group && groupIds.has(n.data.group) ? { group: n.data.group } : {}),
+      ...(n.data.codeRef?.trim() ? { codeRef: n.data.codeRef.trim() } : {}),
+      ...(n.data.uses?.length ? { uses: n.data.uses } : {}),
+      ...(n.data.rules?.some((r) => r.trim()) ? { rules: n.data.rules.map((r) => r.trim()).filter(Boolean) } : {}),
       position: n.position,
     })),
     edges: edges.map((e) => ({

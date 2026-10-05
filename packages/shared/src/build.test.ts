@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createEmptyFlow, type FlowFile, type FlowNode } from "./flow.ts";
-import { buildPlan, buildProgress, buildView, emptyBuildStatus, specOf, type BuildStatus } from "./build.ts";
+import { StepBuildSchema, buildPlan, buildProgress, buildView, emptyBuildStatus, specOf, type BuildStatus } from "./build.ts";
 
 const step = (id: string, patch: Partial<FlowNode> = {}): FlowNode => ({
   id,
@@ -56,4 +56,15 @@ test("editing a step after it was built marks it outdated", () => {
 test("progress counts built steps", () => {
   const status: BuildStatus = { schema: 1, steps: { form: built(flow.nodes[1]) } };
   assert.deepEqual(buildProgress(flow, status), { total: 2, built: 1, building: 0, blocked: 0, outdated: 0 });
+});
+
+test("developer details: older builds still count as built, and new details ask for a rebuild", () => {
+  const node: FlowNode = { id: "pay", kind: "api", title: "Charge", instructions: "Use Stripe", attachments: [], tags: [], position: { x: 0, y: 0 } };
+  // A build record saved before steps had developer details.
+  const old = { kind: "api", title: "Charge", instructions: "Use Stripe", attachments: [], tags: [] } as const;
+  const record = StepBuildSchema.parse({ state: "built", updatedAt: "", builtSpec: old });
+  assert.equal(buildView(node, record), "built");
+  assert.equal(buildView({ ...node, uses: ["Stripe"] }, record), "outdated");
+  assert.equal(buildView({ ...node, rules: ["Never store card numbers"] }, record), "outdated");
+  assert.equal(buildView({ ...node, uses: [] }, record), "built", "an empty list is the same as none");
 });

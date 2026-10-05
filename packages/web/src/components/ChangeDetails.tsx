@@ -20,11 +20,11 @@ export function ChangeList({ diff, onFocus }: { diff: FlowDiff; onFocus: (id: st
   const steps = sortByPosition(diff.nodes.filter((n) => n.status !== "unchanged"));
   const moved = diff.nodes.filter((n) => n.status === "unchanged" && n.moved);
   const arrows = diff.edges.filter((e) => e.status !== "unchanged");
-  const { name, description, groups } = diff.meta;
+  const { name, description, groups, stack, rules } = diff.meta;
   const groupsBefore = new Set(groups?.before);
   const groupsAfter = new Set(groups?.after);
 
-  if (!steps.length && !arrows.length && !name && !description && !groups && !moved.length) {
+  if (!steps.length && !arrows.length && !name && !description && !groups && !stack && !rules && !moved.length) {
     return <p className="inspector-note">These two versions are the same.</p>;
   }
 
@@ -86,11 +86,13 @@ export function ChangeList({ diff, onFocus }: { diff: FlowDiff; onFocus: (id: st
           </ul>
         </section>
       )}
-      {(name || description) && (
+      {(name || description || stack || rules) && (
         <section>
           <h3>About this flow</h3>
           {name && <TextChange label="Flow name" before={name.before} after={name.after} />}
           {description && <TextChange label="What are you building?" before={description.before} after={description.after} />}
+          {stack && <ListChange label="Built with" before={stack.before} after={stack.after} />}
+          {rules && <ListChange label="Rules for the whole app" before={rules.before} after={rules.after} />}
         </section>
       )}
     </div>
@@ -134,6 +136,12 @@ export function NodeChanges({ change, base, target }: { change: NodeDiff; base: 
         <span>Instructions for the AI</span>
         <WordDiff before={before?.instructions ?? ""} after={after?.instructions ?? ""} />
       </div>
+
+      {(before?.codeRef ?? "") !== (after?.codeRef ?? "") && (
+        <TextChange label="In the code" before={before?.codeRef ?? ""} after={after?.codeRef ?? ""} />
+      )}
+      <ListChange label="Uses" before={before?.uses ?? []} after={after?.uses ?? []} />
+      <ListChange label="Rules" before={before?.rules ?? []} after={after?.rules ?? []} />
 
       <AttachmentChanges
         before={before?.attachments ?? []}
@@ -230,6 +238,30 @@ function AttachmentChanges({
                 ))}
               </ol>
             )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Items added to or removed from a short list, like the services a step uses. */
+function ListChange({ label, before, after }: { label: string; before: string[]; after: string[] }) {
+  const added = after.filter((x) => !before.includes(x));
+  const removed = before.filter((x) => !after.includes(x));
+  if (!added.length && !removed.length) return null;
+  return (
+    <div className="field">
+      <span>{label}</span>
+      <ul className="list-change">
+        {added.map((x) => (
+          <li key={`a:${x}`} data-status="added">
+            <ins>{x}</ins>
+          </li>
+        ))}
+        {removed.map((x) => (
+          <li key={`r:${x}`} data-status="removed">
+            <del>{x}</del>
           </li>
         ))}
       </ul>

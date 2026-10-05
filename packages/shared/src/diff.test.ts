@@ -132,3 +132,25 @@ test("grouping steps and renaming groups count as design changes", () => {
   const renamed = { ...grouped, groups: [{ id: "g", title: "Paying" }] };
   assert.deepEqual(diffFlows(grouped, renamed).meta.groups?.after, ["Paying: Pay"]);
 });
+
+test("developer details show up in version diffs, and are left out of files when empty", () => {
+  const base = parseFlow({
+    schema: 1,
+    name: "Store",
+    nodes: [{ id: "pay", kind: "api", title: "Charge", position: { x: 0, y: 0 } }],
+    edges: [],
+  });
+  assert.ok(!/codeRef|uses|rules|stack/.test(serializeFlow(base)), "nothing new is written for flows without them");
+
+  const after = {
+    ...base,
+    stack: ["Next.js", "Stripe"],
+    nodes: base.nodes.map((n) => ({ ...n, codeRef: "POST /api/checkout", uses: ["Stripe"], rules: ["Never store card numbers"] })),
+  };
+  const diff = diffFlows(base, after);
+  const change = diff.nodes[0];
+  assert.equal(change.status, "changed");
+  assert.deepEqual(change.status === "changed" && change.fields, ["codeRef", "uses", "rules"]);
+  assert.deepEqual(diff.meta.stack, { before: [], after: ["Next.js", "Stripe"] });
+  assert.match(serializeFlow(after), /"codeRef": "POST \/api\/checkout"/);
+});
