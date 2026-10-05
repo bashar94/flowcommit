@@ -238,5 +238,5 @@ how to set up, test and send a change. Please report security problems privately
 
 ## License
 
-FlowCommit is open source under the [Apache License 2.0](LICENSE). The FlowCommit name and
-logo aren't covered by the license; [TRADEMARKS.md](TRADEMARKS.md) explains how you can use them.
+FlowCommit is open source under the [Apache License 2.0](LICENSE). The license covers the
+code, not the FlowCommit name or logo.
