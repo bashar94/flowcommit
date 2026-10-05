@@ -9,6 +9,9 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Pinned on purpose: later versions draw exported pictures wrongly with React Flow.
+      - dependency-name: html-to-image
   - package-ecosystem: github-actions
     directory: /
     schedule:
