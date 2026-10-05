@@ -268,3 +268,16 @@ test("a missing part can be drawn from the code and added without changing the r
   expect(flow.edges.some((e: { source: string; target: string }) => e.source === cartId && e.target === chat.id)).toBe(true);
   expect(flow.stack).toEqual(["Gemini"]);
 });
+
+test("when the AI takes too long, the message says so instead of blaming the connection", async ({ page }) => {
+  await mkdir(path.join(projectDir, "src"), { recursive: true });
+  await writeFile(path.join(projectDir, "src", "app.js"), "export {};\n");
+  await page.route("**/api/ai/import", (route) =>
+    route.fulfill({ status: 504, json: { error: "Claude Code was still reading the code after 20 minutes, so FlowCommit stopped it." } }),
+  );
+  await pretendClaudeIsInstalled(page);
+  await page.reload();
+  await page.getByRole("button", { name: "Draw it from my code" }).click();
+  await expect(page.getByRole("alert")).toContainText("still reading the code after 20 minutes");
+  await expect(page.getByText("Can't reach the FlowCommit server")).toHaveCount(0);
+});

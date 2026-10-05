@@ -23,15 +23,26 @@ export type ProviderStatus = {
   install: string;
 };
 
-const TIMEOUT_MS = 300_000;
+/** Quick jobs, like improving a text box or drafting a flow from a description. */
+const TIMEOUT_MS = 5 * 60_000;
+/** Reading a project's code, which takes much longer in a big project. */
+const PROJECT_TIMEOUT_MS = 20 * 60_000;
 const STATUS_TTL_MS = 30_000;
 
-function capture(command: string, args: string[], opts: { input?: string; cwd?: string; signal?: AbortSignal } = {}) {
-  return new Promise<{ code: number | null; stdout: string; stderr: string }>((resolve, reject) => {
+function capture(
+  command: string,
+  args: string[],
+  opts: { input?: string; cwd?: string; signal?: AbortSignal; timeoutMs?: number } = {},
+) {
+  return new Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }>((resolve, reject) => {
     const child = spawn(command, args, { cwd: opts.cwd ?? os.tmpdir(), stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
-    const timer = setTimeout(() => child.kill("SIGTERM"), TIMEOUT_MS);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, opts.timeoutMs ?? TIMEOUT_MS);
     const abort = () => child.kill("SIGTERM");
     opts.signal?.addEventListener("abort", abort, { once: true });
     child.stdout.on("data", (d) => (stdout += d));
@@ -43,7 +54,7 @@ function capture(command: string, args: string[], opts: { input?: string; cwd?: 
     child.on("close", (code) => {
       clearTimeout(timer);
       opts.signal?.removeEventListener("abort", abort);
-      resolve({ code, stdout, stderr });
+      resolve({ code, stdout, stderr, timedOut });
     });
     child.stdin.end(opts.input ?? "");
   });
@@ -117,6 +128,12 @@ export async function ask(provider: ProviderId, system: string, prompt: string, 
  * Like `ask`, but the AI tool runs inside the project and may read (never change) its files.
  * Used to compare the code with the flowchart.
  */
+const tookTooLong = (tool: string) =>
+  new HttpError(
+    504,
+    `${tool} was still reading the code after ${PROJECT_TIMEOUT_MS / 60_000} minutes, so FlowCommit stopped it. In a very big project, map it a part at a time: open Sync and use "Add a part that's missing".`,
+  );
+
 export async function askInProject(
   provider: ProviderId,
   system: string,
@@ -130,7 +147,7 @@ export async function askInProject(
   }
   if (provider === "claude") {
     const readOnly = ["Read", "Grep", "Glob"];
-    const { code, stdout, stderr } = await capture(
+    const { code, stdout, stderr, timedOut } = await capture(
       "claude",
       [
         "-p",
@@ -145,9 +162,10 @@ export async function askInProject(
         "--append-system-prompt",
         system,
       ],
-      { input: prompt, cwd: root, signal },
+      { input: prompt, cwd: root, signal, timeoutMs: PROJECT_TIMEOUT_MS },
     );
     if (signal?.aborted) throw new HttpError(499, "Cancelled.");
+    if (timedOut) throw tookTooLong("Claude Code");
     let parsed: { result?: string; is_error?: boolean } = {};
     try {
       parsed = JSON.parse(stdout);
@@ -162,12 +180,13 @@ export async function askInProject(
   const dir = await mkdtemp(path.join(os.tmpdir(), "flowcommit-codex-"));
   try {
     const out = path.join(dir, "reply.txt");
-    const { code, stderr } = await capture(
+    const { code, stderr, timedOut } = await capture(
       "codex",
       ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "--ephemeral", "--color", "never", "-C", root, "-o", out, "-"],
-      { input: `${system}\n\n---\n\n${prompt}`, cwd: root, signal },
+      { input: `${system}\n\n---\n\n${prompt}`, cwd: root, signal, timeoutMs: PROJECT_TIMEOUT_MS },
     );
     if (signal?.aborted) throw new HttpError(499, "Cancelled.");
+    if (timedOut) throw tookTooLong("Codex");
     const reply = await readFile(out, "utf8").catch(() => "");
     if (code !== 0 || !reply.trim()) throw new HttpError(502, cliError("Codex", stderr));
     return reply;

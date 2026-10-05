@@ -6,6 +6,9 @@
   (areas people use, APIs, background jobs, AI features) and draws each as a group; in a big
   app the groups start folded, so the whole app reads at a glance. Before, it drew only the
   main path and could leave out whole features.
+- Reading a project's code with AI can now take up to 20 minutes (it stopped after 5, which
+  big projects need more than), and when an AI tool fails or runs out of time, the message
+  says so instead of "Can't reach the FlowCommit server".
 - **Add a part that's missing:** in Sync, name a part (like "the AI chatbot") and AI draws it
   from the code as a new group, joined to the steps it connects to, without changing the rest.
 

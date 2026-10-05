@@ -150,7 +150,7 @@ export function Welcome({ initialDescription, onDraft, onImport, onTemplate, onB
             )}
           </div>
           {running?.what === "import" && (
-            <p className="welcome-note">Reading a whole project can take a few minutes. You can keep this tab open and wait.</p>
+            <p className="welcome-note">Reading a whole project takes a few minutes, and up to 20 in a big one. You can keep this tab open and wait.</p>
           )}
           {noAi && (
             <p className="welcome-note">

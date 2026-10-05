@@ -121,10 +121,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     if ((err as Error).name === "AbortError") throw err;
     throw new Error(UNREACHABLE);
   }
-  // The dev proxy answers 502-504 when the FlowCommit server is down or restarting.
-  if (res.status >= 502 && res.status <= 504) throw new Error(UNREACHABLE);
-  shownProject ??= res.headers.get("X-FlowCommit-Project");
   const body = await res.json().catch(() => ({}));
+  // The dev proxy answers 502-504 when the FlowCommit server is down or restarting. The server
+  // itself also uses those codes (an AI tool failed or took too long), and then says why.
+  if (res.status >= 502 && res.status <= 504 && !body.error) throw new Error(UNREACHABLE);
+  shownProject ??= res.headers.get("X-FlowCommit-Project");
   if (!res.ok) throw Object.assign(new Error(body.error ?? `The server answered with status ${res.status}.`), { status: res.status, body });
   return body as T;
 }
