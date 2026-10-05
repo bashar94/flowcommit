@@ -205,4 +205,4 @@ export function parseFlow(input: unknown): FlowFile {
 
 
 /** FlowCommit's own version, shown to plugins and AI tools. */
-export const FLOWCOMMIT_VERSION = "0.1.0";
+export const FLOWCOMMIT_VERSION = "0.1.1";

@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.1.1
 
 - **Getting started guide** (`docs/getting-started.md`) for new apps and existing ones.
 - **`.mcp.json` works for teammates:** FlowCommit no longer writes your folder's path into it,
   and installed copies tell Claude Code to start FlowCommit with `npx flowcommit`.
 - The welcome screen no longer flickers in folders that already have code.
+- The README and quick start now begin with `npx flowcommit`.
 
 ## 0.1.0, first public release
 
