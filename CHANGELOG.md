@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1
 
 - **Drawing a flow from code covers every part of the app.** The AI first lists all the parts
   (areas people use, APIs, background jobs, AI features) and draws each as a group; in a big
