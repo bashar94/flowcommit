@@ -3,6 +3,7 @@ import type {
   DiffStats,
   DraftFlow,
   ImportedFlow,
+  SecretReport,
   FlowFile,
   ProviderId,
   StepSpec,
@@ -89,6 +90,12 @@ export type FolderListing = {
   folders: { name: string; path: string; flowcommit: boolean; git: boolean }[];
 };
 
+/** The secret check's findings, when a save or push was stopped because of them. */
+export function secretsIn(err: unknown): (SecretReport & { commits?: number }) | null {
+  const body = (err as { body?: { secrets?: SecretReport } } | null)?.body;
+  return body?.secrets ?? null;
+}
+
 const json = (body: unknown): RequestInit => ({
   method: "POST",
   headers: { "Content-Type": "application/json" },
@@ -114,7 +121,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   if (res.status >= 502 && res.status <= 504) throw new Error(UNREACHABLE);
   shownProject ??= res.headers.get("X-FlowCommit-Project");
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error ?? `The server answered with status ${res.status}.`);
+  if (!res.ok) throw Object.assign(new Error(body.error ?? `The server answered with status ${res.status}.`), { status: res.status, body });
   return body as T;
 }
 
@@ -146,7 +153,10 @@ export const api = {
 
   turnOnHistory: () => request<{ state: HistoryState }>("/api/history/init", { method: "POST" }),
 
-  saveVersion: (message: string, withCode = false) => request<Version>("/api/versions", json({ message, withCode })),
+  saveVersion: (message: string, withCode = false, opts: { allowSecrets?: boolean; exclude?: string[] } = {}) =>
+    request<Version>("/api/versions", json({ message, withCode, ...opts })),
+
+  ignoreFile: (file: string) => request<{ ok: true }>("/api/secrets/ignore", json({ file })),
 
   codeChanges: () => request<{ files: string[] }>("/api/versions/code-changes"),
 
@@ -207,7 +217,7 @@ export const api = {
 
   pull: () => request<{ ok: true }>("/api/git/pull", { method: "POST" }),
 
-  push: () => request<{ ok: true }>("/api/git/push", { method: "POST" }),
+  push: (opts: { allowSecrets?: boolean } = {}) => request<{ ok: true }>("/api/git/push", json(opts)),
 
   pullRequests: () => request<{ available: boolean; reason?: string; prs: PullRequest[] }>("/api/github/prs"),
 

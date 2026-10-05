@@ -2,7 +2,7 @@ import express, { type ErrorRequestHandler } from "express";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, watch, type FSWatcher } from "node:fs";
-import { mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { ZodError, z } from "zod";
 import {
   DraftFlowSchema,
@@ -17,6 +17,7 @@ import {
   WriteRequestSchema,
   pendingChanges,
   parseFlow,
+  hasSecrets,
 } from "@flowcommit/shared";
 import { Project } from "./project.ts";
 import { History, HttpError } from "./history.ts";
@@ -34,6 +35,7 @@ import {
 } from "./connect.ts";
 import { findDrift, fingerprint, markReviewed, suggestFromCode } from "./codeSync.ts";
 import { Repo } from "./repo.ts";
+import { scanChanges, scanUnpushed } from "./secretScan.ts";
 import {
   checkProjectFolder,
   createProjectFolder,
@@ -219,7 +221,19 @@ app.post("/api/git/pull", async (_req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/git/push", async (_req, res) => {
+/**
+ * Pushing checks every commit that isn't on GitHub yet for passwords and keys first. Once pushed,
+ * a secret stays in the history for anyone to see, so the person decides with the facts in front
+ * of them.
+ */
+app.post("/api/git/push", async (req, res) => {
+  if (req.body?.allowSecrets !== true) {
+    const found = await scanUnpushed(project.root);
+    if (hasSecrets(found)) {
+      res.status(409).json({ error: "These commits look like they contain passwords or keys.", secrets: found });
+      return;
+    }
+  }
   await repo.push();
   res.json({ ok: true });
 });
@@ -233,7 +247,36 @@ app.post("/api/github/prs/:number/fetch", async (req, res) => {
 });
 
 app.post("/api/versions", async (req, res) => {
-  res.json(await history.save(String(req.body?.message ?? ""), { withCode: req.body?.withCode === true }));
+  const withCode = req.body?.withCode === true;
+  const exclude = new Set<string>((Array.isArray(req.body?.exclude) ? req.body.exclude : []).map(String));
+  const codeFiles = withCode ? (await history.codeChanges()).filter((f) => !exclude.has(f)) : [];
+  // Check what's about to be stored for good. The person can still save it anyway.
+  if (req.body?.allowSecrets !== true) {
+    const savedFlow = await history.headFlow().catch(() => null);
+    const found = await scanChanges(project.root, { codeFiles, flow: await project.readFlow(), savedFlow });
+    if (hasSecrets(found)) {
+      res.status(409).json({ error: "This version looks like it contains passwords or keys.", secrets: found });
+      return;
+    }
+  }
+  res.json(await history.save(String(req.body?.message ?? ""), { withCode, files: withCode ? codeFiles : undefined }));
+});
+
+/** Keeps a file out of Git from now on (it stays on disk), for files like `.env`. */
+app.post("/api/secrets/ignore", async (req, res) => {
+  const file = String(req.body?.file ?? "").replace(/^\.\//, "");
+  const full = path.resolve(project.root, file);
+  if (!file || path.relative(project.root, full).startsWith("..") || path.isAbsolute(path.relative(project.root, full))) {
+    throw new HttpError(400, "That file isn't in this project.");
+  }
+  const gitignore = path.join(project.root, ".gitignore");
+  const current = await readFile(gitignore, "utf8").catch(() => "");
+  if (!current.split("\n").some((l) => l.trim() === file)) {
+    await writeFile(gitignore, `${current}${current && !current.endsWith("\n") ? "\n" : ""}${file}\n`);
+  }
+  // If Git already tracks it, stop tracking it without deleting the file.
+  await git(project.root, ["rm", "--cached", "-q", "--ignore-unmatch", "--", file]).catch(() => {});
+  res.json({ ok: true });
 });
 
 app.get("/api/versions/code-changes", async (_req, res) => {

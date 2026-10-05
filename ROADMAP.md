@@ -26,6 +26,7 @@
   `get_design_changes`, removals); code changes come back as suggestions you accept or dismiss
 - Projects: `flowcommit` command (one port, opens the browser), open any folder, recent
   projects, new projects; the local server only answers this computer's own pages
+- Secret check before saving and pushing, for code and the design, and for AI agents
 - Tests: shared logic (`npm test`) and the editor end to end (`npm run test:e2e`)
 
 ## Before the repo goes public

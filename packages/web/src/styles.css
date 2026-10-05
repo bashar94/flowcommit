@@ -4616,3 +4616,92 @@ button.change-row:hover {
     animation: none;
   }
 }
+
+/* ---------- Secret check ---------- */
+
+.secrets-dialog {
+  width: min(600px, calc(100vw - 32px));
+}
+
+.secrets-body {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  max-height: calc(100vh - 64px);
+  overflow-y: auto;
+}
+
+.secrets-dialog .dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.secrets-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.secrets-group {
+  display: grid;
+  gap: 8px;
+}
+
+.secrets-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.secrets-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--danger);
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+
+.secrets-file {
+  flex-direction: column;
+  align-items: flex-start !important;
+}
+
+.secrets-path {
+  font-weight: 700;
+}
+
+.secrets-what code {
+  color: var(--danger);
+}
+
+.secrets-where {
+  color: var(--ink-faint);
+}
+
+.secrets-prompt code {
+  white-space: pre-wrap;
+  font-size: 12px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.secrets-actions {
+  flex-wrap: wrap;
+}
+
+.button-danger {
+  color: var(--danger);
+  margin-left: auto;
+}

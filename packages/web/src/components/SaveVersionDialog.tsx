@@ -35,6 +35,7 @@ export function SaveVersionDialog({ state, flowName, diff, nextNumber, onSave, o
       await onSave(message.trim() || suggestion, withCode && codeFiles.length > 0);
     } catch (err) {
       setError((err as Error).message);
+    } finally {
       setBusy(false);
     }
   };

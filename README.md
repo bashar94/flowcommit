@@ -154,6 +154,13 @@ design. FlowCommit runs the same `git` commands you would, with your own Git sig
   Check GitHub, Pull and Push from its menu, and open a pull request on GitHub.
 - **Pull requests:** sign in to the GitHub CLI (`gh auth login`) to list open pull requests
   and review each one's design changes in FlowCommit.
+- **Secret check:** before a version is saved and before anything is pushed, FlowCommit looks
+  for passwords and API keys (OpenAI, Anthropic, Stripe, AWS, GitHub and more), database
+  addresses with passwords, and files like `.env` or private keys, in the code and in the
+  steps' instructions. It shows where they are without showing them, and offers to leave the
+  file out, keep it out of Git with `.gitignore`, or copy instructions for your AI builder to
+  move them into environment variables. You can still save or push anyway. AI agents get the
+  same warning when they finish a step. Add `flowcommit:allow-secret` to a line to skip it.
 
 ## Mark up images
 

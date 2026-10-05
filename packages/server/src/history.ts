@@ -119,6 +119,12 @@ export class History {
     return versions;
   }
 
+  /** The design as of the last commit, or `null` before the first one. */
+  async headFlow(): Promise<FlowFile | null> {
+    const sha = (await this.run(["rev-parse", "-q", "--verify", "HEAD"]).catch(() => "")).trim();
+    return sha ? this.flowAt(sha) : null;
+  }
+
   /** The flow as it was saved in a version, or `null` if that version's file can't be read. */
   async flowAt(sha: string): Promise<FlowFile | null> {
     if (!SHA.test(sha)) throw new HttpError(400, "That isn't a valid version id.");
@@ -146,16 +152,17 @@ export class History {
    * Saves the design as a version. With `withCode`, the project's code changes go into the same
    * commit, so this version of the design and the code that builds it stay together.
    */
-  async save(message: string, opts: { withCode?: boolean } = {}): Promise<Version> {
+  async save(message: string, opts: { withCode?: boolean; files?: string[] } = {}): Promise<Version> {
     await this.requireReady();
     const text = message.trim();
     if (!text) throw new HttpError(400, "Describe what changed in this version.");
 
-    // Only the project folder: in a bigger repository, other folders are left alone.
-    const scope = opts.withCode ? "." : `./${FLOW_DIR}`;
-    await this.run(["add", "-A", "--", scope]);
+    // Only the project folder: in a bigger repository, other folders are left alone. With a list
+    // of files (some were left out, say for holding a secret), only the design and those files.
+    const scope = !opts.withCode ? [`./${FLOW_DIR}`] : opts.files ? [`./${FLOW_DIR}`, ...opts.files.map((f) => `./${f}`)] : ["."];
+    await this.run(["add", "-A", "--", ...scope]);
     try {
-      await this.run(["diff", "--cached", "--quiet", "--", scope]);
+      await this.run(["diff", "--cached", "--quiet", "--", ...scope]);
       throw new HttpError(409, "Nothing has changed since the last version.");
     } catch (err) {
       if (err instanceof HttpError) throw err;
@@ -163,7 +170,7 @@ export class History {
     }
 
     // `--only` commits just these paths, never anything else the user has staged elsewhere.
-    await this.run([...(await this.identityArgs()), "commit", "--only", "-m", text, "--", scope]);
+    await this.run([...(await this.identityArgs()), "commit", "--only", "-m", text, "--", ...scope]);
     const [latest] = await this.list();
     return latest;
   }

@@ -34,7 +34,8 @@ import {
   type ImportedFlow,
   type NodeKind,
 } from "@flowcommit/shared";
-import { api, type Graph, type HistoryState, type PullRequest, type Version } from "./api.ts";
+import { api, secretsIn, type Graph, type HistoryState, type PullRequest, type Version } from "./api.ts";
+import { SecretsDialog, type SecretsCheck } from "./components/SecretsDialog.tsx";
 import {
   DEFAULT_EDGE_OPTIONS,
   fromCanvas,
@@ -394,14 +395,61 @@ export function App() {
     requestAnimationFrame(() => void rf.fitView({ nodes: [{ id }], ...fitRef.current, maxZoom: 1, duration: 300 }));
   };
 
-  const saveVersion = async (message: string, withCode: boolean) => {
+  // Set when a save or push stopped because it looked like it contained passwords or keys.
+  const [secretsCheck, setSecretsCheck] = useState<SecretsCheck | null>(null);
+
+  const saveVersion = async (
+    message: string,
+    withCode: boolean,
+    opts: { allowSecrets?: boolean; exclude?: string[] } = {},
+  ): Promise<void> => {
     if (history.state === "not-repo") await api.turnOnHistory();
     await flushSave();
-    const version = await api.saveVersion(message, withCode);
+    let version: Version;
+    try {
+      version = await api.saveVersion(message, withCode, opts);
+    } catch (err) {
+      const found = secretsIn(err);
+      if (!found) throw err;
+      setSaveDialog(false);
+      setSecretsCheck({
+        context: "save",
+        report: found,
+        leaveOut: (files) => saveVersion(message, withCode, { ...opts, exclude: [...(opts.exclude ?? []), ...files] }),
+        anyway: () => saveVersion(message, withCode, { ...opts, allowSecrets: true }),
+        recheck: () => saveVersion(message, withCode, opts),
+      });
+      return;
+    }
+    setSecretsCheck(null);
     await loadHistory();
     await loadGraph();
     setSaveDialog(false);
-    notify(`Version ${version.number} saved${withCode ? " with your code" : ""}`);
+    const left = opts.exclude?.length ?? 0;
+    notify(
+      `Version ${version.number} saved${withCode ? " with your code" : ""}${left ? `, leaving out ${left} ${left === 1 ? "file" : "files"}` : ""}`,
+    );
+  };
+
+  const push = async (opts: { allowSecrets?: boolean } = {}): Promise<void> => {
+    await flushSave();
+    ownGitChangeUntil.current = Date.now() + 5000;
+    try {
+      await api.push(opts);
+    } catch (err) {
+      const found = secretsIn(err);
+      if (!found) throw err;
+      setSecretsCheck({
+        context: "push",
+        report: found,
+        anyway: () => push({ allowSecrets: true }),
+        recheck: () => push(),
+      });
+      return;
+    }
+    setSecretsCheck(null);
+    await afterGitChange();
+    notify("Pushed to GitHub");
   };
 
   /** Opens a saved version as a new branch, so both the design and the code go back to it. */
@@ -1016,11 +1064,11 @@ export function App() {
           onSwitch={switchBranch}
           onCreate={createBranch}
           onSync={async (what) => {
-            if (what === "push") await flushSave();
+            if (what === "push") return push();
             ownGitChangeUntil.current = Date.now() + 5000;
-            await (what === "push" ? api.push() : what === "pull" ? api.pull() : api.fetchRemote());
+            await (what === "pull" ? api.pull() : api.fetchRemote());
             await afterGitChange();
-            notify(what === "push" ? "Pushed to GitHub" : what === "pull" ? "Pulled the latest from GitHub" : "Checked GitHub for updates");
+            notify(what === "pull" ? "Pulled the latest from GitHub" : "Checked GitHub for updates");
           }}
           onReviewBranch={(b) => void reviewBranch(b)}
           onReviewPullRequest={(pr) => void reviewPullRequest(pr)}
@@ -1300,6 +1348,9 @@ export function App() {
 
       {!tipsDone && load.status === "ready" && mode === "edit" && !showWelcome && !tour && nodes.length > 1 && (
         <FirstRunTips onDone={() => setTipsDone(true)} />
+      )}
+      {secretsCheck && (
+        <SecretsDialog check={secretsCheck} onShowStep={selectStep} onClose={() => setSecretsCheck(null)} />
       )}
       {saveDialog && draftDiff && (
         <SaveVersionDialog

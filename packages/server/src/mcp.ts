@@ -20,6 +20,8 @@ import {
   describeSuggestion,
   hasPending,
   pendingChanges,
+  riskyFile,
+  scanText,
   type Suggestion,
   diffWords,
   specOf,
@@ -60,6 +62,8 @@ Design → code:
 Code → design:
 Whenever you build or change something the flowchart doesn't show (a screen, an endpoint, data, a decision, an error path), or the code works differently from a step's instructions, call suggest_flow_change. The person reviews your suggestion in FlowCommit. This applies to every change you make in this project, even ones the person asks for directly in chat.
 
+Never put passwords, API keys or tokens in the code or the flow: read them from environment variables, keep them in a .env file listed in .gitignore, and add a .env.example with placeholders. FlowCommit checks for secrets when the person saves or pushes.
+
 Never edit .flowcommit/ yourself. The person edits the design in the FlowCommit app.`;
 
 const server = new McpServer({ name: "flowcommit", version: "0.1.0" }, { instructions: INSTRUCTIONS });
@@ -73,6 +77,21 @@ const VIEW_LABEL = {
 } as const;
 
 const text = (t: string) => ({ type: "text" as const, text: t });
+
+/** Passwords and keys in the files an agent just wrote, described without repeating them. */
+async function secretsIn(files: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const f of files) {
+    const full = path.resolve(project.root, f);
+    if (path.relative(project.root, full).startsWith("..")) continue;
+    const reason = riskyFile(f);
+    if (reason) out.push(`${f}: ${reason.toLowerCase()}; make sure it's in .gitignore`);
+    const body = await readFile(full, "utf8").catch(() => "");
+    if (body.length > 1024 * 1024) continue;
+    for (const s of scanText(f, body)) out.push(`${f}, line ${s.line}: ${s.label} (${s.preview})`);
+  }
+  return out;
+}
 const groupNote = (flow: FlowFile, id?: string) => {
   const g = id && flow.groups.find((x) => x.id === id);
   return g ? ` (in "${g.title}")` : "";
@@ -339,9 +358,17 @@ server.registerTool(
       builtSpec: specOf(node),
     }));
     const progress = buildProgress(flow, status);
+    const leaks = await secretsIn(files);
     return {
       content: [
         text(`Marked "${node.title}" as built. ${progress.built} of ${progress.total} steps are built. Call next_step to continue.`),
+        ...(leaks.length
+          ? [
+              text(
+                `Warning: these look like secrets written into the code. Move each one into an environment variable (in a .env file listed in .gitignore) before continuing:\n${leaks.map((l) => `- ${l}`).join("\n")}`,
+              ),
+            ]
+          : []),
       ],
     };
   },
