@@ -65,8 +65,10 @@ Then:
 
 FlowCommit opens on the first free port from 4318 (`--port` picks one, `--no-open` skips the
 browser). Inside the app, click the project name at the top left to open another folder, pick
-a recent project, or start a new one. It isn't on npm yet, so `npx flowcommit` will work once
-it's published.
+a recent project, or start a new one.
+
+Once FlowCommit is on npm, you won't need to clone it: `npx flowcommit` in your app's folder
+will be enough.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/simple-dark.png">
@@ -295,6 +297,13 @@ To work on two projects at once, give the second one its own ports:
 ```sh
 FLOWCOMMIT_PROJECT=/path/to/other/app FLOWCOMMIT_PORT=4319 FLOWCOMMIT_WEB_PORT=5319 npm run dev
 ```
+
+### Releasing
+
+Set the new version in `package.json` and `FLOWCOMMIT_VERSION` (in
+`packages/shared/src/flow.ts`), note the changes in [CHANGELOG.md](CHANGELOG.md), and push.
+Then create a release on GitHub with a matching tag, like `v0.1.0`. The
+[release workflow](.github/workflows/release.yml) runs every test and publishes to npm.
 
 ## Contributing
 

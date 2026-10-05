@@ -1,0 +1,55 @@
+# Publishes FlowCommit to npm when a release is published on GitHub.
+#
+# 1. Set "version" in package.json (and FLOWCOMMIT_VERSION in packages/shared/src/flow.ts),
+#    add the changes to CHANGELOG.md, and push.
+# 2. On GitHub, create a release with a tag like v0.1.0 that matches that version.
+#
+# Sign-in to npm, either of:
+# - Trusted publishing (recommended, no secret): on npmjs.com, open the package's settings and
+#   add this repository and the workflow file name "release.yml" as a trusted publisher.
+# - A token: add an npm access token with publish rights as the repository secret NPM_TOKEN.
+#   The very first publish needs this, because the package doesn't exist on npm yet.
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  id-token: write # lets npm verify the package was built here (trusted publishing and provenance)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      # Trusted publishing needs a recent npm.
+      - run: npm install -g npm@latest
+      - name: Check the release tag matches the version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          code="$(node -p "require('fs').readFileSync('packages/shared/src/flow.ts','utf8').match(/FLOWCOMMIT_VERSION = \"(.+?)\"/)[1]")"
+          if [ "$tag" != "$version" ] || [ "$code" != "$version" ]; then
+            echo "The release tag ($GITHUB_REF_NAME), package.json ($version) and FLOWCOMMIT_VERSION ($code) must match."
+            exit 1
+          fi
+      - run: npm ci
+      # Typecheck, unit tests and build run in prepublishOnly; the editor tests run here too.
+      - name: Editor tests
+        run: npm run test:e2e
+        env:
+          GIT_AUTHOR_NAME: CI
+          GIT_AUTHOR_EMAIL: ci@example.com
+          GIT_COMMITTER_NAME: CI
+          GIT_COMMITTER_EMAIL: ci@example.com
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

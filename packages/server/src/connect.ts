@@ -4,17 +4,24 @@ import { fileURLToPath } from "node:url";
 import type { Project } from "./project.ts";
 
 /**
- * How to run one of FlowCommit's scripts (mcp or hook). The installed app runs its bundled
- * JavaScript with Node; a copy of the source runs the TypeScript through tsx.
+ * The command that runs one of FlowCommit's scripts (mcp or hook), as [program, ...args].
+ * - Run through npx, FlowCommit lives in npm's cache, which can be cleared or replaced by a
+ *   newer version, so AI tools are told to start it through npx too.
+ * - Installed (npm install -g or npm link), it runs its bundled JavaScript with Node.
+ * - From a copy of the source, it runs the TypeScript through tsx.
  */
 function scriptLaunch(name: "mcp" | "hook"): string[] {
-  if (import.meta.filename.endsWith(".js")) return [path.join(import.meta.dirname, `${name}.js`)];
-  return [fileURLToPath(import.meta.resolve("tsx/cli")), path.join(import.meta.dirname, `${name}.ts`)];
+  if (import.meta.filename.endsWith(".js")) {
+    if (import.meta.dirname.split(path.sep).includes("_npx")) return ["npx", "-y", "flowcommit", name];
+    return [process.execPath, path.join(import.meta.dirname, `${name}.js`)];
+  }
+  return [process.execPath, fileURLToPath(import.meta.resolve("tsx/cli")), path.join(import.meta.dirname, `${name}.ts`)];
 }
 
 /** How an AI CLI should start FlowCommit's MCP server for this project. */
 export function mcpLaunch(project: Project) {
-  return { command: process.execPath, args: [...scriptLaunch("mcp"), "--project", project.root] };
+  const [command, ...args] = scriptLaunch("mcp");
+  return { command, args: [...args, "--project", project.root] };
 }
 
 const quote = (s: string) => (/^[\w./:@-]+$/.test(s) ? s : `'${s.replaceAll("'", `'\\''`)}'`);
@@ -65,7 +72,7 @@ const HOOK_MARKER = "flowcommit-hook";
 /** The shell command Claude Code runs before each message. Paths are quoted because they can contain spaces. */
 function hookCommand(): string {
   const q = (s: string) => `"${s.replaceAll('"', '\\"')}"`;
-  return `${[process.execPath, ...scriptLaunch("hook")].map(q).join(" ")} --project "$CLAUDE_PROJECT_DIR" # ${HOOK_MARKER}`;
+  return `${scriptLaunch("hook").map(q).join(" ")} --project "$CLAUDE_PROJECT_DIR" # ${HOOK_MARKER}`;
 }
 
 const claudeSettingsPath = (project: Project) => path.join(project.root, ".claude", "settings.json");

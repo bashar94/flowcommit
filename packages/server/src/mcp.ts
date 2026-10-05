@@ -11,6 +11,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import {
+  FLOWCOMMIT_VERSION,
   NODE_KIND_INFO,
   buildPlan,
   buildProgress,
@@ -66,7 +67,7 @@ Never put passwords, API keys or tokens in the code or the flow: read them from 
 
 Never edit .flowcommit/ yourself. The person edits the design in the FlowCommit app.`;
 
-const server = new McpServer({ name: "flowcommit", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+const server = new McpServer({ name: "flowcommit", version: FLOWCOMMIT_VERSION }, { instructions: INSTRUCTIONS });
 
 const VIEW_LABEL = {
   todo: "not built yet",

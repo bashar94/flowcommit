@@ -23,14 +23,15 @@
     "spec-driven-development"
   ],
   "description": "Visual version control and an IDE for vibe coders: design your app as a flowchart, let AI agents build it, and keep every version in Git.",
-  "private": true,
   "type": "module",
   "bin": {
     "flowcommit": "bin/flowcommit.mjs"
   },
   "files": [
     "bin",
-    "dist"
+    "dist",
+    "NOTICE",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20.19"
@@ -46,7 +47,8 @@
     "start": "node bin/flowcommit.mjs",
     "test:e2e": "npm run build && playwright test",
     "schema": "tsx scripts/schema.ts",
-    "screenshots": "npm run build && SCREENSHOTS=1 playwright test e2e/screenshots.spec.ts"
+    "screenshots": "npm run build && SCREENSHOTS=1 playwright test e2e/screenshots.spec.ts",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
