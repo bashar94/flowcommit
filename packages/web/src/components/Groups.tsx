@@ -2,7 +2,7 @@ import { createContext, memo, useContext, useEffect, useRef, useState } from "re
 import { Handle, Position, ViewportPortal, useStore, type NodeProps } from "@xyflow/react";
 import type { FlowGroup } from "@flowcommit/shared";
 import type { StepNode } from "../model.ts";
-import { groupBounds, type GroupCardNode } from "../groups.ts";
+import { FRAME, groupBounds, type GroupCardNode } from "../groups.ts";
 import { Icon } from "../icons.tsx";
 
 /** What the canvas can do with a group, for the frames and the folded cards. */
@@ -18,8 +18,8 @@ export type GroupActions = {
 };
 export const GroupActionsContext = createContext<GroupActions | null>(null);
 
-const PAD = 22;
-const HEADER = 34;
+const PAD = FRAME.pad;
+const HEADER = FRAME.header;
 
 /** A frame around each open group's steps. Its title bar moves, renames, folds or ungroups it. */
 export function GroupFrames({

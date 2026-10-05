@@ -9,15 +9,18 @@
 
 export const LAYOUT = { cardWidth: 248, rowHeight: 176, cardHeight: 112, rowGap: 64, columnGap: 72 } as const;
 
-export function layoutFlow(
+type Edge = { source: string; target: string };
+
+/**
+ * The rows of a flow, top to bottom, each in left-to-right order. Shared by the step layout and
+ * the layout of whole parts.
+ */
+function orderedRows(
   ids: string[],
-  edges: { source: string; target: string }[],
-  roots: string[] = [],
-  /** Measured card heights, when known, so tall cards (like screens with images) get room. */
-  heights: Map<string, number> = new Map(),
-  /** The group each step is in, if any. */
-  groups: Map<string, string> = new Map(),
-): Map<string, { x: number; y: number }> {
+  edges: Edge[],
+  roots: string[],
+  groups: Map<string, string>,
+): { rows: string[][]; row: Map<string, number>; parents: Map<string, string[]>; slot: Map<string, number> } {
   const known = new Set(ids);
   const out = new Map(ids.map((id) => [id, [] as string[]]));
   for (const e of edges) {
@@ -38,7 +41,7 @@ export function layoutFlow(
     }
     state.set(id, "done");
   };
-  const hasIncoming = new Set(edges.map((e) => e.target));
+  const hasIncoming = new Set(edges.filter((e) => known.has(e.source)).map((e) => e.target));
   const starts = [...roots.filter((r) => known.has(r)), ...ids.filter((id) => !hasIncoming.has(id))];
   for (const id of [...starts, ...ids]) if (!state.has(id)) visit(id);
 
@@ -60,8 +63,12 @@ export function layoutFlow(
 
   // Order each row by where its parents sit, so children line up under them.
   const slot = new Map<string, number>();
+  const ordered: string[][] = [];
   for (const r of rows) {
-    if (!r) continue;
+    if (!r) {
+      ordered.push([]);
+      continue;
+    }
     const weight = (id: string) => {
       const ps = parents.get(id)!.filter((p) => slot.has(p));
       return ps.length ? ps.reduce((sum, p) => sum + slot.get(p)!, 0) / ps.length : Number.POSITIVE_INFINITY;
@@ -82,14 +89,28 @@ export function layoutFlow(
     );
     const width = sorted.length - 1;
     sorted.forEach(({ id }, i) => slot.set(id, i - width / 2));
+    ordered.push(sorted.map((x) => x.id));
   }
+  return { rows: ordered, row, parents, slot };
+}
+
+export function layoutFlow(
+  ids: string[],
+  edges: Edge[],
+  roots: string[] = [],
+  /** Measured card heights, when known, so tall cards (like screens with images) get room. */
+  heights: Map<string, number> = new Map(),
+  /** The group each step is in, if any. */
+  groups: Map<string, string> = new Map(),
+): Map<string, { x: number; y: number }> {
+  const { rows, row, slot } = orderedRows(ids, edges, roots, groups);
 
   // Each row starts below the tallest card of the row above it.
   const rowTop: number[] = [];
   let top = 0;
   rows.forEach((r, i) => {
     rowTop[i] = top;
-    const tallest = Math.max(...(r ?? []).map((id) => heights.get(id) ?? LAYOUT.cardHeight));
+    const tallest = Math.max(...r.map((id) => heights.get(id) ?? LAYOUT.cardHeight));
     top += Math.max(tallest + LAYOUT.rowGap, LAYOUT.rowHeight);
   });
 
@@ -100,6 +121,52 @@ export function layoutFlow(
       x: Math.round(slot.get(id)! * step - LAYOUT.cardWidth / 2),
       y: rowTop[row.get(id)!] ?? 0,
     });
+  }
+  return positions;
+}
+
+/** Room between blocks: parts of the app, or steps that aren't in a part. */
+export const BLOCK_GAP = { column: 96, row: 88 } as const;
+
+/**
+ * Lays out blocks of different sizes (whole parts of the app, and loose steps) in rows, the
+ * same way steps are: each below what leads into it, and centered under it where there's room.
+ * Returns each block's top-left corner. Blocks never overlap.
+ */
+export function layoutBlocks(
+  ids: string[],
+  edges: Edge[],
+  roots: string[],
+  sizes: Map<string, { width: number; height: number }>,
+): Map<string, { x: number; y: number }> {
+  const { rows, parents } = orderedRows(ids, edges, roots, new Map());
+  const size = (id: string) => sizes.get(id) ?? { width: LAYOUT.cardWidth, height: LAYOUT.cardHeight };
+  const center = new Map<string, number>();
+  const positions = new Map<string, { x: number; y: number }>();
+  let top = 0;
+  for (const r of rows) {
+    if (!r.length) continue;
+    // Where each block would like to be: centered under the blocks that lead into it.
+    const wanted = r.map((id) => {
+      const ps = parents.get(id)!.filter((p) => center.has(p));
+      return ps.length ? ps.reduce((sum, p) => sum + center.get(p)!, 0) / ps.length : 0;
+    });
+    // Place left to right without overlapping, then shift the row back toward where it wanted to be.
+    const lefts: number[] = [];
+    let right = -Infinity;
+    r.forEach((id, i) => {
+      const w = size(id).width;
+      const left = Math.max(wanted[i] - w / 2, right + BLOCK_GAP.column);
+      lefts.push(left);
+      right = left + w;
+    });
+    const shift = r.reduce((sum, id, i) => sum + (wanted[i] - (lefts[i] + size(id).width / 2)), 0) / r.length;
+    r.forEach((id, i) => {
+      const x = Math.round(lefts[i] + shift);
+      positions.set(id, { x, y: Math.round(top) });
+      center.set(id, x + size(id).width / 2);
+    });
+    top += Math.max(...r.map((id) => size(id).height)) + BLOCK_GAP.row;
   }
   return positions;
 }

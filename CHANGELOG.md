@@ -9,6 +9,11 @@
 - Reading a project's code with AI can now take up to 20 minutes (it stopped after 5, which
   big projects need more than), and when an AI tool fails or runs out of time, the message
   says so instead of "Can't reach the FlowCommit server".
+- **Parts no longer overlap.** Flows with groups are laid out by parts: each part's steps
+  inside its own frame, and the parts as blocks, so frames never cover each other. With parts
+  folded, opening one pushes the others aside instead of spreading over them, and the view
+  moves to it; folding is still only a view, so it doesn't change the file. Arrows to folded
+  parts drop their labels to keep the overview clean. **Tidy up** uses the same layout.
 - **Add a part that's missing:** in Sync, name a part (like "the AI chatbot") and AI draws it
   from the code as a new group, joined to the steps it connects to, without changing the rest.
 

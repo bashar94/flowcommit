@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { LAYOUT, layoutFlow } from "./layout.ts";
+import { LAYOUT, layoutBlocks, layoutFlow } from "./layout.ts";
 
 const rowOf = (pos: Map<string, { y: number }>, id: string) => pos.get(id)!.y / LAYOUT.rowHeight;
 
@@ -64,4 +64,26 @@ test("steps in the same group are placed side by side", () => {
   const ia = order.indexOf("a");
   const ic = order.indexOf("c");
   assert.equal(Math.abs(ia - ic), 1, `a and c should be neighbors, got ${order.join(" ")}`);
+});
+
+test("blocks of different sizes never overlap, and line up under what leads into them", () => {
+  const sizes = new Map([
+    ["a", { width: 248, height: 120 }],
+    ["big", { width: 900, height: 600 }],
+    ["c", { width: 248, height: 120 }],
+    ["d", { width: 400, height: 300 }],
+  ]);
+  const pos = layoutBlocks(["a", "big", "c", "d"], [
+    { source: "a", target: "big" },
+    { source: "a", target: "c" },
+    { source: "big", target: "d" },
+  ], ["a"], sizes);
+  const boxes = [...pos].map(([id, p]) => ({ id, ...p, ...sizes.get(id)! }));
+  for (const x of boxes)
+    for (const y of boxes) {
+      if (x.id >= y.id) continue;
+      const apart = x.x + x.width <= y.x || y.x + y.width <= x.x || x.y + x.height <= y.y || y.y + y.height <= x.y;
+      assert.ok(apart, `${x.id} and ${y.id} overlap`);
+    }
+  assert.ok(pos.get("big")!.y > pos.get("a")!.y && pos.get("d")!.y > pos.get("big")!.y);
 });

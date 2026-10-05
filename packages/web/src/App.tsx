@@ -32,6 +32,7 @@ import {
   type DraftFlow,
   type FlowFile,
   type ImportedFlow,
+  type FlowGroup,
   type ImportedPart,
   type PluginsInfo,
   type NodeKind,
@@ -66,7 +67,7 @@ import { Welcome } from "./components/Welcome.tsx";
 import { ProjectMenu } from "./components/ProjectMenu.tsx";
 import { FirstRunTips, tipsSeen } from "./components/FirstRunTips.tsx";
 import { GroupActionsContext, GroupCard, GroupFrames, type GroupActions } from "./components/Groups.tsx";
-import { foldGroups, isGroupCard, newGroupId, type CanvasNode } from "./groups.ts";
+import { arrangeByParts, foldGroups, foldedOffsets, isGroupCard, newGroupId, type CanvasNode } from "./groups.ts";
 import { printPicture } from "./printPicture.ts";
 // The picture library loads only when someone exports.
 const loadExport = () => import("./exportImage.ts");
@@ -91,6 +92,13 @@ const ARROW_COLOR = { yes: "var(--add)", no: "var(--del)", back: "var(--arrow-ba
 const SAVE_DELAY_MS = 600;
 const NEW_STEP_OFFSET = { x: LAYOUT.cardWidth / 2, y: 40 };
 /** Leaves room for the floating toolbar and side panel so no card hides behind them. */
+/** Lays out a flow: by parts when it has groups, otherwise step by step. */
+function tidy(nodes: StepNode[], edges: ArrowEdge[], groups: FlowGroup[]) {
+  return groups.some((g) => nodes.some((n) => n.data.group === g.id))
+    ? { nodes: arrangeByParts(nodes, edges, groups), edges }
+    : arrange(nodes, edges);
+}
+
 const FOLDED_KEY = "flowcommit.folded-groups";
 function readFolded(): Set<string> {
   try {
@@ -200,15 +208,18 @@ export function App() {
   // Set once the undo history exists below.
   const amendUndo = useRef<() => void>(() => {});
   const allMeasured = nodes.length > 0 && nodes.every((n) => n.measured?.width);
+  // Bumped whenever the whole layout is redone, so the folded view is worked out again.
+  const [layoutVersion, setLayoutVersion] = useState(0);
   useEffect(() => {
     if (!allMeasured || !arrangeWhenReady.current) return;
     arrangeWhenReady.current = false;
     amendUndo.current(); // tidying up the new flow isn't a separate step to undo
-    const next = arrange(nodes, edges);
+    const next = tidy(nodes, edges, meta.groups);
     setNodes(next.nodes);
     setEdges(next.edges);
+    setLayoutVersion((v) => v + 1);
     fitSoon();
-  }, [allMeasured, nodes, edges, fitSoon, setNodes, setEdges]);
+  }, [allMeasured, nodes, edges, meta.groups, fitSoon, setNodes, setEdges]);
 
   // Saves run one after another so an older save can never overwrite a newer one.
   const saveChain = useRef<Promise<void>>(Promise.resolve());
@@ -243,6 +254,7 @@ export function App() {
         return canvas.nodes.map((n) => ({ ...n, measured: measured.get(n.id) }));
       });
       setEdges(canvas.edges);
+      setLayoutVersion((v) => v + 1);
       setLoad({ status: "ready" });
       resetUndo.current();
       if (!opts.keepView) setTimeout(() => void rfRef.current.fitView(fitRef.current), 60);
@@ -775,9 +787,10 @@ export function App() {
   /** Re-arranges every step top to bottom, keeping all text and arrows as they are. */
   const tidyUp = useCallback(() => {
     const before = { nodes, edges };
-    const next = arrange(nodes, edges);
+    const next = tidy(nodes, edges, meta.groups);
     setNodes(next.nodes);
     setEdges(next.edges);
+    setLayoutVersion((v) => v + 1);
     fitSoon();
     notify("Steps tidied up", {
       action: {
@@ -788,7 +801,7 @@ export function App() {
         },
       },
     });
-  }, [nodes, edges, fitSoon, setNodes, setEdges, notify]);
+  }, [nodes, edges, meta.groups, fitSoon, setNodes, setEdges, notify]);
 
   const onDrop = useCallback(
     (e: DragEvent) => {
@@ -860,7 +873,14 @@ export function App() {
         setNodes((ns) => ns.map((n) => (n.data.group === id && n.selected ? { ...n, selected: false } : n)));
         setFolded((f) => new Set([...f, id]));
       },
-      unfold: (id) => setFolded((f) => new Set([...f].filter((g) => g !== id))),
+      unfold: (id) => {
+        setFolded((f) => new Set([...f].filter((g) => g !== id)));
+        // Bring the opened part into view once the others have moved aside.
+        setTimeout(() => {
+          const members = rfRef.current.getNodes().filter((n) => (n.data as StepData).group === id);
+          if (members.length) void rfRef.current.fitView({ nodes: members, ...fitRef.current, maxZoom: 1, duration: 400 });
+        }, 80);
+      },
       rename: (id, title) => setMeta((m) => ({ ...m, groups: m.groups.map((g) => (g.id === id ? { ...g, title } : g)) })),
       ungroup: (id) => {
         setNodes((ns) =>
@@ -1063,13 +1083,33 @@ export function App() {
   // What the canvas draws: folded groups become single cards, and arrows go to those cards.
   // The cards aren't part of the design, so their measured sizes are kept here instead.
   const [cardSizes, setCardSizes] = useState<Map<string, { width: number; height: number }>>(new Map());
+  // While groups are folded, the canvas draws a compact layout (opening a group pushes the
+  // others aside). Worked out again only when folding or the layout changes, not while dragging.
+  const layoutKey = [
+    layoutVersion,
+    [...folded].sort().join(","),
+    meta.groups.map((g) => g.id).join(","),
+    nodes.map((n) => `${n.id}:${n.data.group ?? ""}:${Math.round(n.measured?.height ?? 0)}`).join(","),
+    [...cardSizes].map(([id, s]) => `${id}:${Math.round(s.height)}`).join(","),
+  ].join("|");
+  const offsets = useMemo(() => foldedOffsets(nodes, edges, meta.groups, folded, cardSizes), [layoutKey]);
+  const shownNodes = useMemo(
+    () =>
+      offsets.size
+        ? nodes.map((n) => {
+            const o = offsets.get(n.id);
+            return o && (o.x || o.y) ? { ...n, position: { x: n.position.x + o.x, y: n.position.y + o.y } } : n;
+          })
+        : nodes,
+    [nodes, offsets],
+  );
   const canvas = useMemo(() => {
-    const view = foldGroups(nodes, shownEdges, meta.groups, folded, numbers);
+    const view = foldGroups(shownNodes, shownEdges, meta.groups, folded, numbers);
     return {
       ...view,
       nodes: view.nodes.map((n) => (n.type === "folded" && cardSizes.has(n.id) ? { ...n, measured: cardSizes.get(n.id) } : n)),
     };
-  }, [nodes, shownEdges, meta.groups, folded, numbers, cardSizes]);
+  }, [shownNodes, shownEdges, meta.groups, folded, numbers, cardSizes]);
   const onCanvasNodesChange = useCallback<OnNodesChange<CanvasNode>>(
     (changes) => {
       const sizes = changes.filter((c) => c.type === "dimensions" && isGroupCard(c.id) && c.dimensions);
@@ -1080,9 +1120,17 @@ export function App() {
           return next;
         });
       }
-      onNodesChange(changes.filter((c) => !("id" in c && isGroupCard(c.id))) as Parameters<typeof onNodesChange>[0]);
+      // Dragged cards report where they're drawn; the flow keeps positions without the folded view's offsets.
+      const real = changes
+        .filter((c) => !("id" in c && isGroupCard(c.id)))
+        .map((c) => {
+          if (c.type !== "position" || !c.position) return c;
+          const o = offsets.get(c.id);
+          return o ? { ...c, position: { x: c.position.x - o.x, y: c.position.y - o.y } } : c;
+        });
+      onNodesChange(real as Parameters<typeof onNodesChange>[0]);
     },
-    [onNodesChange],
+    [onNodesChange, offsets],
   );
 
   const startTour = () => {
@@ -1364,7 +1412,7 @@ export function App() {
                   />
                   <GroupFrames
                     groups={meta.groups}
-                    nodes={nodes}
+                    nodes={shownNodes}
                     folded={folded}
                     editing={editingGroup}
                     onEditDone={() => setEditingGroup(null)}
