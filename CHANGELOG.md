@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - **Developer details on steps:** where a step is in the code (route, endpoint, table or
   function), the services it uses, and rules the code must follow; plus what the app is built
