@@ -76,11 +76,16 @@ export function ViewMenu({
   options,
   onChange,
   onExport,
+  shareTargets = [],
+  onShare,
 }: {
   options: ViewOptions;
   onChange: (o: ViewOptions) => void;
   /** Saves a picture of the flow. Leave it out where there's nothing to export. */
   onExport?: (format: "png" | "pdf") => void;
+  /** Ways to share added by plugins, like a cloud share link. */
+  shareTargets?: { id: string; label: string; description?: string }[];
+  onShare?: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -144,6 +149,12 @@ export function ViewMenu({
                 <button type="button" className="button" onClick={() => { setOpen(false); onExport("pdf"); }}>
                   <Icon name="download" size={14} /> Print or save as PDF
                 </button>
+                {onShare &&
+                  shareTargets.map((t) => (
+                    <button key={t.id} type="button" className="button" title={t.description} onClick={() => { setOpen(false); onShare(t.id); }}>
+                      <Icon name="link" size={14} /> {t.label}
+                    </button>
+                  ))}
               </div>
             </div>
           )}

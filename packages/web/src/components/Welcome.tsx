@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { DraftFlow, ImportedFlow } from "@flowcommit/shared";
+import type { DraftFlow, ImportedFlow, TemplateSummary } from "@flowcommit/shared";
 import { api } from "../api.ts";
 import { useAi } from "../ai.tsx";
 import { Icon } from "../icons.tsx";
@@ -42,6 +42,28 @@ export function Welcome({ initialDescription, onDraft, onImport, onTemplate, onB
   useEffect(() => {
     if (!fromCode) textRef.current?.focus();
   }, [fromCode]);
+
+  // Templates added by plugins, like your own folder of templates or a marketplace.
+  const [more, setMore] = useState<{ source: { id: string; label: string }; templates: TemplateSummary[] }[]>([]);
+  const [opening, setOpening] = useState<string | null>(null);
+  useEffect(() => {
+    api
+      .templates()
+      .then((r) => setMore(r.sources.filter((s) => s.templates.length > 0)))
+      .catch(() => {});
+  }, []);
+  const openTemplate = async (sourceId: string, id: string) => {
+    setOpening(`${sourceId}/${id}`);
+    setError("");
+    try {
+      const t = await api.template(sourceId, id);
+      onTemplate({ id: t.id, title: t.title, blurb: t.blurb, description: t.description, flow: t.flow });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setOpening(null);
+    }
+  };
 
   useEffect(() => {
     if (!running) return;
@@ -222,6 +244,37 @@ export function Welcome({ initialDescription, onDraft, onImport, onTemplate, onB
             ))}
           </div>
         </div>
+
+        {more.map(({ source, templates }) => (
+          <div key={source.id} className="welcome-templates">
+            <p className="welcome-subhead">{source.label}</p>
+            <div className="template-grid">
+              {templates.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  className="template"
+                  disabled={!!running || !!opening}
+                  onClick={() => void openTemplate(source.id, t.id)}
+                >
+                  <span className="template-preview" aria-hidden="true">
+                    {(t.preview ?? []).slice(0, 5).map((kind, i) => (
+                      <i key={i} data-kind={kind} />
+                    ))}
+                  </span>
+                  <span className="template-title">
+                    {t.title}
+                    {t.price && <span className="template-price">{t.price}</span>}
+                  </span>
+                  <span className="template-blurb">
+                    {opening === `${source.id}/${t.id}` ? "Opening…" : t.blurb}
+                    {t.author && opening !== `${source.id}/${t.id}` ? `, by ${t.author}` : ""}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
 
         <button type="button" className="button-quiet welcome-skip" disabled={!!running} onClick={onBlank}>
           Start with a blank canvas

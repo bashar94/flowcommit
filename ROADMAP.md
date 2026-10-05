@@ -27,22 +27,18 @@
 - Projects: `flowcommit` command (one port, opens the browser), open any folder, recent
   projects, new projects; the local server only answers this computer's own pages
 - Secret check before saving and pushing, for code and the design, and for AI agents
+- Plugins: template sources, share targets, build runners and events, with an example plugin
+  and `flowcommit plugin add | remove | list`
+- The `flow.json` format documented, with a JSON Schema kept in step with the code
 - Tests: shared logic (`npm test`) and the editor end to end (`npm run test:e2e`)
 
-## Before the repo goes public
-
-Done: license, contributing and security files, CI, issue templates, Tidy up that keeps groups
-together, and loading History, mark-up and export only when they're first used.
+## Next
 
 | To do | Why |
 |---|---|
-| Plugin API | Stable connection points (template sources, sync storage, build runners, share targets, sign-in) so paid services can plug in without changing this repo. |
-| `flow.json` spec and JSON Schema | A documented, versioned format, so nobody is locked in and other tools can read flows. |
 | Publish to npm | So `npx flowcommit` works without cloning this repo. |
-
-A password (token) for the local server was considered and left out: it only guards against
-other programs on the same computer, which can already read the project folder. See
-[SECURITY.md](SECURITY.md).
+| A sign-in connection point for plugins | Paid services need to know who's signed in; today each plugin handles that itself. |
+| More example plugins | A share-link and a backup example would help people build their own. |
 
 ## Later
 

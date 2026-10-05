@@ -6,6 +6,8 @@ import { Icon } from "../icons.tsx";
 
 type Props = {
   info: BuildInfo | null;
+  /** Builders added by plugins, like cloud AI builders. */
+  runners?: { id: string; label: string; description: string }[];
   plan: PlannedStep[];
   onConnected: () => void;
   onSelectStep: (id: string) => void;
@@ -16,9 +18,11 @@ const BUILD_PROMPT = "Build my app from the FlowCommit flow";
 const SYNC_PROMPT = "Sync the code with the FlowCommit flow";
 
 /** Shows build progress and how to connect Claude Code or Codex so they can build the flow. */
-export function BuildDialog({ info, plan, onConnected, onSelectStep, onClose }: Props) {
+export function BuildDialog({ info, runners = [], plan, onConnected, onSelectStep, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
-  const [tool, setTool] = useState<"claude" | "codex">("claude");
+  const [tool, setTool] = useState<string>("claude");
+  const [started, setStarted] = useState<{ message: string; url?: string } | null>(null);
+  const runner = runners.find((r) => r.id === tool);
   const [busy, setBusy] = useState(false);
   const [withHook, setWithHook] = useState(true);
   const [error, setError] = useState("");
@@ -79,9 +83,56 @@ export function BuildDialog({ info, plan, onConnected, onSelectStep, onClose }: 
             <button type="button" role="tab" aria-pressed={tool === "codex"} onClick={() => setTool("codex")}>
               Codex CLI
             </button>
+            {runners.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                role="tab"
+                aria-pressed={tool === r.id}
+                onClick={() => {
+                  setTool(r.id);
+                  setStarted(null);
+                }}
+              >
+                {r.label}
+              </button>
+            ))}
           </div>
 
-          {tool === "claude" ? (
+          {runner ? (
+            <div className="build-steps runner-panel">
+              <p className="inspector-note">{runner.description}</p>
+              {started ? (
+                <p className="build-done">
+                  <Icon name="check" size={14} /> {started.message}{" "}
+                  {started.url && (
+                    <a href={started.url} target="_blank" rel="noreferrer">
+                      Open
+                    </a>
+                  )}
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  className="button-primary"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError("");
+                    try {
+                      setStarted(await api.startRunner(runner.id));
+                    } catch (err) {
+                      setError((err as Error).message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {busy ? "Starting…" : `Build with ${runner.label}`}
+                </button>
+              )}
+            </div>
+          ) : tool === "claude" ? (
             <ol className="build-steps">
               <li>
                 <span className="build-step-title">Add FlowCommit to this project</span>

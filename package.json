@@ -24,7 +24,8 @@
     "test": "npm test --workspaces --if-present",
     "build": "node scripts/build.mjs",
     "start": "node bin/flowcommit.mjs",
-    "test:e2e": "npm run build && playwright test"
+    "test:e2e": "npm run build && playwright test",
+    "schema": "tsx scripts/schema.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

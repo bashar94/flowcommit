@@ -59,7 +59,8 @@ your-app/
 ```
 
 `flow.json` is plain, sorted JSON so Git diffs stay small and readable. The format is
-defined in `packages/shared/src/index.ts`. The only thing kept outside your project is the
+documented in [docs/flow-format.md](docs/flow-format.md), with a JSON Schema in
+[schema/](schema/flow-v1.schema.json). The only thing kept outside your project is the
 list of recent projects, in `~/.flowcommit/recent.json`.
 
 ## AI help, using the AI tools you already have
@@ -223,6 +224,13 @@ In History, **Restore this design** brings back only the drawing. **Open as a br
 a new branch at that version, so the design and the code both go back to it, and your current
 branch stays as it was.
 
+## Plugins
+
+Plugins add templates to start from, ways to share a flow, and ways to build it. Add one with
+`flowcommit plugin add <name or folder>`. [docs/plugins.md](docs/plugins.md) explains how to
+write one, and [examples/plugins/local-templates](examples/plugins/local-templates) is a small
+working example.
+
 ## Code layout
 
 | Folder | What it is |
@@ -232,6 +240,8 @@ branch stays as it was.
 | `packages/web` | The flowchart editor (React + React Flow) |
 | `bin`, `scripts` | The `flowcommit` command and the build that bundles everything for it |
 | `e2e` | Editor tests (Playwright) |
+| `docs`, `schema` | The flow file format and plugin guide, and the flow JSON Schema |
+| `examples/plugins` | Example plugins |
 
 ## Roadmap
 

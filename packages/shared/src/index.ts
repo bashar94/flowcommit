@@ -5,4 +5,6 @@ export * from "./layout.ts";
 export * from "./build.ts";
 export * from "./annotations.ts";
 export * from "./secrets.ts";
+export * from "./plugin.ts";
+export * from "./schema.ts";
 export * from "./sync.ts";

@@ -29,76 +29,86 @@ export type AnnotationKind = (typeof ANNOTATION_KINDS)[number];
 export const ANNOTATION_COLORS = ["red", "yellow", "blue", "green"] as const;
 export type AnnotationColor = (typeof ANNOTATION_COLORS)[number];
 
-/**
- * A numbered mark drawn on an image, with a note saying what to change there.
- * Points are fractions of the image's width and height (0 to 1), so they fit any size:
- * a box has two corners, an arrow goes from its first point to its second, a pin has one
- * point, and a drawing has many.
- */
-export const AnnotationSchema = z.object({
-  id: z.string(),
-  kind: z.enum(ANNOTATION_KINDS),
-  color: z.enum(ANNOTATION_COLORS).default("red"),
-  points: z.array(z.tuple([z.number(), z.number()])).min(1).max(4000),
-  note: z.string().default(""),
-});
+// The descriptions below also go into the published JSON Schema (schema/flow.schema.json).
+
+export const AnnotationSchema = z
+  .object({
+    id: z.string(),
+    kind: z.enum(ANNOTATION_KINDS).describe("box: two corners. arrow: from its first point to its second. pin: one point. pen: a drawing."),
+    color: z.enum(ANNOTATION_COLORS).default("red"),
+    points: z
+      .array(z.tuple([z.number(), z.number()]))
+      .min(1)
+      .max(4000)
+      .describe("Points as fractions of the image's width and height (0 to 1), so marks fit any size."),
+    note: z.string().default("").describe("What to change at this spot."),
+  })
+  .describe("A numbered mark drawn on an image, with a note saying what to change there.");
 export type Annotation = z.infer<typeof AnnotationSchema>;
 
-export const AttachmentSchema = z.object({
-  id: z.string(),
-  kind: z.enum(["image", "video", "link"]),
-  /** Path relative to the assets folder for uploads, or a full URL for links. */
-  src: z.string(),
-  caption: z.string().default(""),
-  annotations: z.array(AnnotationSchema).default([]),
-  /** A copy of the image with the numbered marks drawn on it, for AI tools to look at. */
-  annotatedSrc: z.string().optional(),
-});
+export const AttachmentSchema = z
+  .object({
+    id: z.string(),
+    kind: z.enum(["image", "video", "link"]),
+    src: z.string().describe("For images and videos, a file name in .flowcommit/assets/. For links, a full URL."),
+    caption: z.string().default(""),
+    annotations: z.array(AnnotationSchema).default([]),
+    annotatedSrc: z
+      .string()
+      .optional()
+      .describe("A copy of the image with the numbered marks drawn on it, in .flowcommit/assets/, for AI tools to look at."),
+  })
+  .describe("An image, video or link that explains a step.");
 export type Attachment = z.infer<typeof AttachmentSchema>;
 
-export const FlowNodeSchema = z.object({
-  id: z.string(),
-  kind: z.enum(NODE_KINDS),
-  title: z.string(),
-  /** Free-form instructions for the AI agent. Markdown is allowed. */
-  instructions: z.string().default(""),
-  attachments: z.array(AttachmentSchema).default([]),
-  /** Short labels people add to group steps, like "auth" or "MVP". */
-  tags: z.array(z.string()).default([]),
-  /** The group (a named part of the flow, like "Checkout") this step belongs to, if any. */
-  group: z.string().optional(),
-  position: z.object({ x: z.number(), y: z.number() }),
-});
+export const FlowNodeSchema = z
+  .object({
+    id: z.string().describe("Unique within the flow. Never reused, so versions can be compared step by step."),
+    kind: z.enum(NODE_KINDS).describe("The type of step, which sets its shape."),
+    title: z.string().describe("A few words, like \"Charge the card\"."),
+    instructions: z.string().default("").describe("What to build, for the AI agent. Markdown is allowed."),
+    attachments: z.array(AttachmentSchema).default([]),
+    tags: z.array(z.string()).default([]).describe('Short labels, like "auth" or "MVP".'),
+    group: z.string().optional().describe("The id of the group this step is in, if any."),
+    position: z
+      .object({ x: z.number(), y: z.number() })
+      .describe("Where the step sits on the canvas, in pixels. Moving a step isn't a design change."),
+  })
+  .describe("One step of the flow.");
 export type FlowNode = z.infer<typeof FlowNodeSchema>;
 
-export const FlowEdgeSchema = z.object({
-  id: z.string(),
-  source: z.string(),
-  target: z.string(),
-  label: z.string().default(""),
-  /** Which side of the source step the arrow leaves from. Only decisions have more than one. */
-  sourceHandle: z.enum(["left", "right"]).optional(),
-});
+export const FlowEdgeSchema = z
+  .object({
+    id: z.string(),
+    source: z.string().describe("The id of the step the arrow starts at."),
+    target: z.string().describe("The id of the step the arrow points to."),
+    label: z.string().default("").describe('Shown on the arrow, like "Yes" or "No" after a decision.'),
+    sourceHandle: z
+      .enum(["left", "right"])
+      .optional()
+      .describe("Which corner of a decision the arrow leaves from. Leave it out for the bottom."),
+  })
+  .describe("An arrow from one step to the next.");
 export type FlowEdge = z.infer<typeof FlowEdgeSchema>;
 
-/**
- * A named part of the flow, like "Sign up" or "Checkout". It frames its steps on the canvas and
- * can be folded into one card, so a big flow reads as a few parts.
- */
-export const FlowGroupSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-});
+export const FlowGroupSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+  })
+  .describe('A named part of the flow, like "Checkout". Its steps are the ones whose group is this id.');
 export type FlowGroup = z.infer<typeof FlowGroupSchema>;
 
-export const FlowFileSchema = z.object({
-  schema: z.literal(SCHEMA_VERSION),
-  name: z.string(),
-  description: z.string().default(""),
-  groups: z.array(FlowGroupSchema).default([]),
-  nodes: z.array(FlowNodeSchema),
-  edges: z.array(FlowEdgeSchema),
-});
+export const FlowFileSchema = z
+  .object({
+    schema: z.literal(SCHEMA_VERSION).describe("The version of this format."),
+    name: z.string().describe("The app's name."),
+    description: z.string().default("").describe("What the app is. AI agents read this before every step."),
+    groups: z.array(FlowGroupSchema).default([]),
+    nodes: z.array(FlowNodeSchema),
+    edges: z.array(FlowEdgeSchema),
+  })
+  .describe("A FlowCommit flow: an app's design as steps and arrows, stored in .flowcommit/flow.json.");
 export type FlowFile = z.infer<typeof FlowFileSchema>;
 
 export function createEmptyFlow(name: string): FlowFile {
@@ -193,3 +203,6 @@ export function parseFlow(input: unknown): FlowFile {
   return flow;
 }
 
+
+/** FlowCommit's own version, shown to plugins and AI tools. */
+export const FLOWCOMMIT_VERSION = "0.1.0";

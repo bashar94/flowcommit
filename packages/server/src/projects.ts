@@ -11,7 +11,8 @@ import { z } from "zod";
 import { FLOW_DIR, FLOW_FILE } from "@flowcommit/shared";
 import { HttpError } from "./history.ts";
 
-const HOME = process.env.FLOWCOMMIT_HOME ?? path.join(os.homedir(), ".flowcommit");
+/** FlowCommit's own folder for settings that aren't part of any project. */
+export const HOME = process.env.FLOWCOMMIT_HOME ?? path.join(os.homedir(), ".flowcommit");
 const RECENT_FILE = path.join(HOME, "recent.json");
 const MAX_RECENT = 12;
 

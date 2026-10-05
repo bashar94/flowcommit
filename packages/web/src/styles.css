@@ -4705,3 +4705,21 @@ button.change-row:hover {
   color: var(--danger);
   margin-left: auto;
 }
+
+/* ---------- Plugins ---------- */
+
+.template-price {
+  margin-left: 6px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.runner-panel {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0;
+}

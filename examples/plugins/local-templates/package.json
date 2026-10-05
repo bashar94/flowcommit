@@ -1,0 +1,9 @@
+{
+  "name": "flowcommit-plugin-local-templates",
+  "version": "0.1.0",
+  "description": "FlowCommit plugin: start new flows from templates kept in a folder on your computer.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": "./index.mjs",
+  "keywords": ["flowcommit-plugin"]
+}

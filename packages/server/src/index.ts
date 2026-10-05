@@ -18,6 +18,7 @@ import {
   pendingChanges,
   parseFlow,
   hasSecrets,
+  FLOWCOMMIT_VERSION,
 } from "@flowcommit/shared";
 import { Project } from "./project.ts";
 import { History, HttpError } from "./history.ts";
@@ -36,6 +37,7 @@ import {
 import { findDrift, fingerprint, markReviewed, suggestFromCode } from "./codeSync.ts";
 import { Repo } from "./repo.ts";
 import { scanChanges, scanUnpushed } from "./secretScan.ts";
+import { buildRunner, emit, getTemplate, listTemplates, loadPlugins, registry, shareTarget } from "./plugins.ts";
 import {
   checkProjectFolder,
   createProjectFolder,
@@ -164,6 +166,7 @@ app.put("/api/flow", async (req, res) => {
   }
   await project.writeFlow(flow);
   res.json({ ok: true });
+  emit("flowSaved", { project: projectInfo(), flow });
 });
 
 app.post(
@@ -236,6 +239,8 @@ app.post("/api/git/push", async (req, res) => {
   }
   await repo.push();
   res.json({ ok: true });
+  const branch = (await git(project.root, ["symbolic-ref", "--short", "-q", "HEAD"]).catch(() => "")).trim() || null;
+  emit("pushed", { project: projectInfo(), branch });
 });
 
 app.get("/api/github/prs", async (_req, res) => {
@@ -259,7 +264,10 @@ app.post("/api/versions", async (req, res) => {
       return;
     }
   }
-  res.json(await history.save(String(req.body?.message ?? ""), { withCode, files: withCode ? codeFiles : undefined }));
+  const message = String(req.body?.message ?? "");
+  const version = await history.save(message, { withCode, files: withCode ? codeFiles : undefined });
+  res.json(version);
+  emit("versionSaved", { project: projectInfo(), sha: version.sha, message: version.message, withCode });
 });
 
 /** Keeps a file out of Git from now on (it stays on disk), for files like `.env`. */
@@ -388,6 +396,38 @@ app.post("/api/open-file", async (req, res) => {
   if (!file || !real.startsWith(root + path.sep)) throw new HttpError(404, "That file isn't in this project.");
   openWithSystem(real);
   res.json({ ok: true });
+});
+
+// ----- Plugins -----
+
+const projectInfo = () => ({ name: project.name, root: project.root });
+
+const ShareResultSchema = z.object({ message: z.string(), url: z.string().url().optional() });
+
+app.get("/api/plugins", (_req, res) => {
+  res.json(registry.info());
+});
+
+app.get("/api/templates", async (_req, res) => {
+  res.json({ sources: await listTemplates() });
+});
+
+app.get("/api/templates/:source/:id", async (req, res) => {
+  res.json(await getTemplate(req.params.source, req.params.id));
+});
+
+app.post("/api/share/:target", async (req, res) => {
+  const result = await shareTarget(req.params.target)({ project: projectInfo(), flow: await project.readFlow() });
+  const parsed = ShareResultSchema.safeParse(result);
+  if (!parsed.success) throw new HttpError(502, "The sharing plugin answered with something FlowCommit couldn't read.");
+  res.json(parsed.data);
+});
+
+app.post("/api/runners/:id/start", async (req, res) => {
+  const result = await buildRunner(req.params.id)({ project: projectInfo(), flow: await project.readFlow() });
+  const parsed = ShareResultSchema.safeParse(result);
+  if (!parsed.success) throw new HttpError(502, "The builder plugin answered with something FlowCommit couldn't read.");
+  res.json(parsed.data);
 });
 
 // ----- Building with an AI agent -----
@@ -610,7 +650,12 @@ async function openProject(root: string) {
   await watchGit();
   await rememberProject(project.root, project.name).catch(() => {});
   send("project", { name: project.name, path: project.root });
+  emit("projectOpened", { project: projectInfo() });
 }
+
+// Plugins load before the first request, so the editor sees everything they add.
+await loadPlugins(FLOWCOMMIT_VERSION);
+emit("projectOpened", { project: projectInfo() });
 
 await watchFlow();
 await watchGit();

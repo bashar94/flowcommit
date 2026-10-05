@@ -3,7 +3,7 @@
  * folder and projects. Nothing here touches your own FlowCommit or ~/.flowcommit.
  */
 import { execFileSync, spawn } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -16,6 +16,41 @@ mkdirSync(first, { recursive: true });
 execFileSync("git", ["init", "-q"], { cwd: first });
 console.log(`E2E projects in ${root}`);
 
+// Plugins: the open example (templates from a folder) and a test plugin for the other connection points.
+const home = path.join(root, "home");
+const templates = path.join(root, "templates");
+mkdirSync(home, { recursive: true });
+mkdirSync(templates, { recursive: true });
+writeFileSync(
+  path.join(home, "config.json"),
+  JSON.stringify({
+    plugins: [
+      path.resolve(import.meta.dirname, "../examples/plugins/local-templates"),
+      path.resolve(import.meta.dirname, "plugins/test-plugin.mjs"),
+    ],
+  }),
+);
+writeFileSync(
+  path.join(templates, "newsletter.json"),
+  JSON.stringify({
+    title: "Newsletter sign-up",
+    blurb: "Form, confirm email, welcome",
+    description: "A newsletter sign-up page with double opt-in.",
+    flow: {
+      name: "Newsletter",
+      steps: [
+        { id: "s1", kind: "start", title: "Visitor opens the page" },
+        { id: "s2", kind: "screen", title: "Sign-up form" },
+        { id: "s3", kind: "end", title: "Subscribed" },
+      ],
+      arrows: [
+        { from: "s1", to: "s2" },
+        { from: "s2", to: "s3" },
+      ],
+    },
+  }),
+);
+
 const child = spawn(
   process.execPath,
   [path.resolve(import.meta.dirname, "../bin/flowcommit.mjs"), first, "--port", port, "--no-open"],
@@ -23,7 +58,9 @@ const child = spawn(
     stdio: "inherit",
     env: {
       ...process.env,
-      FLOWCOMMIT_HOME: path.join(root, "home"),
+      FLOWCOMMIT_HOME: home,
+      FLOWCOMMIT_TEMPLATES_DIR: templates,
+      E2E_EVENTS_FILE: path.join(root, "events.log"),
       FLOWCOMMIT_E2E_ROOT: path.join(root, "projects"),
       GIT_AUTHOR_NAME: "E2E",
       GIT_AUTHOR_EMAIL: "e2e@example.com",

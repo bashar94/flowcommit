@@ -32,6 +32,7 @@ import {
   type DraftFlow,
   type FlowFile,
   type ImportedFlow,
+  type PluginsInfo,
   type NodeKind,
 } from "@flowcommit/shared";
 import { api, secretsIn, type Graph, type HistoryState, type PullRequest, type Version } from "./api.ts";
@@ -144,6 +145,11 @@ export function App() {
   const [buildDialog, setBuildDialog] = useState(false);
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const [tipsDone, setTipsDone] = useState(tipsSeen);
+  // What plugins added: share options and builders. Templates are fetched by the welcome screen.
+  const [plugins, setPlugins] = useState<PluginsInfo | null>(null);
+  useEffect(() => {
+    api.plugins().then(setPlugins).catch(() => {});
+  }, []);
   const [focusTitleKey, setFocusTitleKey] = useState(0);
   const view = useViewOptions();
 
@@ -988,6 +994,22 @@ export function App() {
     });
   }, [tour, edges, rf, view.options.outline]);
 
+  /** Sends the flow to a sharing option a plugin added, like a cloud share link. */
+  const shareWith = async (id: string) => {
+    await flushSave();
+    try {
+      const result = await api.share(id);
+      notify(result.url ? `${result.message} ${result.url}` : result.message, {
+        sticky: !!result.url,
+        action: result.url
+          ? { label: "Copy link", run: () => void navigator.clipboard.writeText(result.url!).catch(() => {}) }
+          : undefined,
+      });
+    } catch (err) {
+      notify((err as Error).message);
+    }
+  };
+
   /** Saves a picture of the flow as it looks now, for sharing in a doc or a chat. */
   const exportFlow = (format: "png" | "pdf") => {
     setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
@@ -1077,6 +1099,8 @@ export function App() {
           options={view.options}
           onChange={view.setOptions}
           onExport={mode === "edit" && load.status === "ready" && !showWelcome ? exportFlow : undefined}
+          shareTargets={plugins?.shareTargets}
+          onShare={(id) => void shareWith(id)}
         />
         <button
           type="button"
@@ -1339,6 +1363,7 @@ export function App() {
       {buildDialog && (
         <BuildDialog
           info={build.info}
+          runners={plugins?.buildRunners}
           plan={build.plan}
           onConnected={() => void build.refresh()}
           onSelectStep={selectStep}

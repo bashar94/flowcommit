@@ -1,0 +1,257 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/bashar94/flowcommit/main/schema/flow-v1.schema.json",
+  "title": "FlowCommit flow",
+  "type": "object",
+  "properties": {
+    "schema": {
+      "type": "number",
+      "const": 1,
+      "description": "The version of this format."
+    },
+    "name": {
+      "type": "string",
+      "description": "The app's name."
+    },
+    "description": {
+      "default": "",
+      "description": "What the app is. AI agents read this before every step.",
+      "type": "string"
+    },
+    "groups": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "description": "A named part of the flow, like \"Checkout\". Its steps are the ones whose group is this id."
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique within the flow. Never reused, so versions can be compared step by step."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "start",
+              "step",
+              "decision",
+              "screen",
+              "api",
+              "data",
+              "end"
+            ],
+            "description": "The type of step, which sets its shape."
+          },
+          "title": {
+            "type": "string",
+            "description": "A few words, like \"Charge the card\"."
+          },
+          "instructions": {
+            "default": "",
+            "description": "What to build, for the AI agent. Markdown is allowed.",
+            "type": "string"
+          },
+          "attachments": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "image",
+                    "video",
+                    "link"
+                  ]
+                },
+                "src": {
+                  "type": "string",
+                  "description": "For images and videos, a file name in .flowcommit/assets/. For links, a full URL."
+                },
+                "caption": {
+                  "default": "",
+                  "type": "string"
+                },
+                "annotations": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "box",
+                          "arrow",
+                          "pin",
+                          "pen"
+                        ],
+                        "description": "box: two corners. arrow: from its first point to its second. pin: one point. pen: a drawing."
+                      },
+                      "color": {
+                        "default": "red",
+                        "type": "string",
+                        "enum": [
+                          "red",
+                          "yellow",
+                          "blue",
+                          "green"
+                        ]
+                      },
+                      "points": {
+                        "minItems": 1,
+                        "maxItems": 4000,
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "description": "Points as fractions of the image's width and height (0 to 1), so marks fit any size."
+                      },
+                      "note": {
+                        "default": "",
+                        "description": "What to change at this spot.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "kind",
+                      "points"
+                    ],
+                    "description": "A numbered mark drawn on an image, with a note saying what to change there."
+                  }
+                },
+                "annotatedSrc": {
+                  "description": "A copy of the image with the numbered marks drawn on it, in .flowcommit/assets/, for AI tools to look at.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "src"
+              ],
+              "description": "An image, video or link that explains a step."
+            }
+          },
+          "tags": {
+            "default": [],
+            "description": "Short labels, like \"auth\" or \"MVP\".",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "group": {
+            "description": "The id of the group this step is in, if any.",
+            "type": "string"
+          },
+          "position": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ],
+            "description": "Where the step sits on the canvas, in pixels. Moving a step isn't a design change."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "position"
+        ],
+        "description": "One step of the flow."
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "description": "The id of the step the arrow starts at."
+          },
+          "target": {
+            "type": "string",
+            "description": "The id of the step the arrow points to."
+          },
+          "label": {
+            "default": "",
+            "description": "Shown on the arrow, like \"Yes\" or \"No\" after a decision.",
+            "type": "string"
+          },
+          "sourceHandle": {
+            "description": "Which corner of a decision the arrow leaves from. Leave it out for the bottom.",
+            "type": "string",
+            "enum": [
+              "left",
+              "right"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "target"
+        ],
+        "description": "An arrow from one step to the next."
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "name",
+    "nodes",
+    "edges"
+  ],
+  "description": "A FlowCommit flow: an app's design as steps and arrows, stored in .flowcommit/flow.json."
+}

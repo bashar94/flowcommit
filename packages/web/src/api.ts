@@ -4,6 +4,9 @@ import type {
   DraftFlow,
   ImportedFlow,
   SecretReport,
+  PluginsInfo,
+  Template as PluginTemplate,
+  TemplateSummary,
   FlowFile,
   ProviderId,
   StepSpec,
@@ -175,6 +178,21 @@ export const api = {
 
   aiDraft: (body: { provider: ProviderId; description: string }, signal?: AbortSignal) =>
     request<DraftFlow>("/api/ai/draft", { ...json(body), signal }),
+
+  plugins: () => request<PluginsInfo>("/api/plugins"),
+
+  templates: () =>
+    request<{ sources: { source: { id: string; label: string }; templates: TemplateSummary[]; error?: string }[] }>(
+      "/api/templates",
+    ),
+
+  template: (source: string, id: string) =>
+    request<PluginTemplate>(`/api/templates/${encodeURIComponent(source)}/${encodeURIComponent(id)}`),
+
+  share: (target: string) => request<{ message: string; url?: string }>(`/api/share/${encodeURIComponent(target)}`, { method: "POST" }),
+
+  startRunner: (id: string) =>
+    request<{ message: string; url?: string }>(`/api/runners/${encodeURIComponent(id)}/start`, { method: "POST" }),
 
   openFile: (file: string) => request<{ ok: true }>("/api/open-file", json({ file })),
 
