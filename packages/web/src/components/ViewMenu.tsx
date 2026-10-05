@@ -201,11 +201,9 @@ export function Legend() {
       <p className="legend-title">Shapes</p>
       <ul>
         {NODE_KINDS.map((k) => (
-          <li key={k} data-kind={k}>
+          <li key={k} data-kind={k} title={NODE_KIND_INFO[k].hint}>
             <ShapeIcon kind={k} />
-            <span>
-              <strong>{NODE_KIND_INFO[k].label}</strong> {NODE_KIND_INFO[k].hint.toLowerCase()}
-            </span>
+            <strong>{NODE_KIND_INFO[k].label}</strong>
           </li>
         ))}
       </ul>

@@ -3397,10 +3397,11 @@ button.change-row:hover {
 }
 
 /* With the outline open on the left, the legend moves next to the side panel. */
+/* Top right of the canvas, clear of the step palette at the bottom. */
 .legend-card {
-  top: auto;
+  top: 16px;
   left: auto;
-  bottom: 16px;
+  bottom: auto;
   right: 404px;
 }
 
@@ -4722,4 +4723,20 @@ button.change-row:hover {
   display: grid;
   gap: 12px;
   padding: 4px 0;
+}
+
+/* ---------- Top bar on narrower screens ---------- */
+
+/* Buttons keep their words on one line; below 1480px a few labels give way to their icons. */
+.topbar button,
+.topbar .save-state,
+.topbar-project {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1480px) {
+  .topbar .wide-only {
+    display: none;
+  }
 }

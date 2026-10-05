@@ -1,51 +1,77 @@
 # FlowCommit
 
-Draw it. Commit it. AI builds it.
+**Draw it. Commit it. AI builds it.**
 
-FlowCommit is a visual version control system for vibe coders. You design your app as a
-flowchart, attach instructions, screenshots and videos to each step, and AI agents build
-the code from it. Every change to the design becomes a version you can compare.
+FlowCommit is visual version control and an IDE for vibe coders. You design your app as a
+flowchart, with instructions, screenshots and videos on each step. Claude Code or Codex
+builds the code from it, one step at a time. Every change to the design is a version in Git
+that you can compare, review and go back to.
 
-## Run it
+[![CI](https://github.com/bashar94/flowcommit/actions/workflows/ci.yml/badge.svg)](https://github.com/bashar94/flowcommit/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-Build it once, then start it in any project folder:
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/editor-dark.png">
+  <img alt="The FlowCommit editor: an online store's flow as a flowchart, with a Checkout group, steps marked Built and one Building, and the selected step's instructions on the right." src="docs/images/editor-light.png">
+</picture>
+
+## Why
+
+When you build with AI, the plan lives in a chat that scrolls away, and the code is the only
+record of what the app is meant to do. FlowCommit keeps the plan as a flowchart anyone can
+read, makes it the spec your AI agent builds from, and keeps both in step:
+
+- **The flowchart is the spec.** Seven step types, each with its own shape (a diamond for
+  decisions, a browser window for screens, a cylinder for data), with instructions, images,
+  videos and links. Mark up a screenshot to point at exactly what you mean.
+- **AI builds from it.** Claude Code or Codex reads the flow through FlowCommit's MCP server
+  and builds it step by step. Each card shows Building, Built or Changed since built.
+- **Sync both ways.** Change a step and your AI tool is told what changed. Change the code
+  and FlowCommit suggests how the flowchart should change, for you to accept or dismiss.
+- **Every version in Git.** Save versions, see what changed on the canvas, review branches
+  and pull requests as diagrams, and go back to any version's design and code.
+- **No new accounts or keys.** It runs on your computer and uses the Claude Code or Codex
+  sign-in you already have.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/history-dark.png">
+  <img alt="History: two versions of the store compared on the canvas, with an added step in green, a changed step in yellow and a removed step in red, and a list of what changed." src="docs/images/history-light.png">
+</picture>
+
+## Quick start
+
+You need [Node.js](https://nodejs.org) 20.19 or newer and Git. To build with AI, install
+[Claude Code](https://claude.com/claude-code) or [Codex CLI](https://github.com/openai/codex)
+and sign in once.
 
 ```sh
+git clone https://github.com/bashar94/flowcommit.git
+cd flowcommit
 npm install
 npm run build
-npx /path/to/FlowCommit          # in your app's folder, or: npx /path/to/FlowCommit ~/my-app
+npm link                  # makes the flowcommit command available everywhere
+
+cd ~/path/to/your-app
+flowcommit                # opens FlowCommit for this folder in your browser
 ```
 
-It opens in your browser on the first free port from 4318 (`--port` picks one, `--no-open`
-skips the browser). `npm link` in this folder makes it a plain `flowcommit` command. It isn't
-published to npm yet.
+Then:
 
-Inside the app, click the project name at the top left to **open another folder**, pick one
-of your **recent projects**, or start a **new project** (a new folder with Git turned on).
-FlowCommit only answers requests from this computer, from pages on this computer.
+1. **Start a flow:** describe your app and let AI draw it, start from a template, or, if the
+   folder already has code, let AI draw the flow from your code.
+2. **Click Build** and follow the steps to connect Claude Code or Codex. Ask it to "build my
+   app from the FlowCommit flow".
+3. **Change the design** whenever you like, and save versions as you go.
 
-### Working on FlowCommit itself
+FlowCommit opens on the first free port from 4318 (`--port` picks one, `--no-open` skips the
+browser). Inside the app, click the project name at the top left to open another folder, pick
+a recent project, or start a new one. It isn't on npm yet, so `npx flowcommit` will work once
+it's published.
 
-```sh
-npm install
-npm run dev
-```
-
-Then open http://localhost:5317. Run the tests with `npm test` (shared logic) and
-`npm run test:e2e` (the editor, driven in your installed Chrome).
-
-By default the dev server edits a `demo-project/` folder inside this repo. To design a real
-project, point it at that project's folder:
-
-```sh
-FLOWCOMMIT_PROJECT=/path/to/your/app npm run dev
-```
-
-To work on two projects at once, give the second one its own ports:
-
-```sh
-FLOWCOMMIT_PROJECT=/path/to/other/app FLOWCOMMIT_PORT=4319 FLOWCOMMIT_WEB_PORT=5319 npm run dev
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/simple-dark.png">
+  <img alt="The Simple view: shapes and titles only, with a numbered outline of the flow on the left and a legend of the shapes." src="docs/images/simple-light.png">
+</picture>
 
 ## Where your design is stored
 
@@ -246,6 +272,29 @@ working example.
 ## Roadmap
 
 See [ROADMAP.md](ROADMAP.md) for what's built and what's next.
+
+## Working on FlowCommit itself
+
+```sh
+npm install
+npm run dev
+```
+
+Then open http://localhost:5317. Run the tests with `npm test` (shared logic) and
+`npm run test:e2e` (the editor, driven in your installed Chrome).
+
+By default the dev server edits a `demo-project/` folder inside this repo. To design a real
+project, point it at that project's folder:
+
+```sh
+FLOWCOMMIT_PROJECT=/path/to/your/app npm run dev
+```
+
+To work on two projects at once, give the second one its own ports:
+
+```sh
+FLOWCOMMIT_PROJECT=/path/to/other/app FLOWCOMMIT_PORT=4319 FLOWCOMMIT_WEB_PORT=5319 npm run dev
+```
 
 ## Contributing
 

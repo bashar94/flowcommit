@@ -104,8 +104,6 @@ const FIT_VIEW = {
   maxZoom: 1,
 } as const;
 
-/** With the outline open on the left, keep cards out from under it too. */
-const FIT_WITH_OUTLINE: FitViewOptions = { ...FIT_VIEW, padding: { ...FIT_VIEW.padding, left: "330px" } };
 
 const EMPTY_GRAPH: Graph = {
   commits: [],
@@ -169,7 +167,15 @@ export function App() {
   const rfRef = useRef(rf);
   rfRef.current = rf;
   const fitRef = useRef<FitViewOptions>(FIT_VIEW);
-  fitRef.current = view.options.outline ? FIT_WITH_OUTLINE : FIT_VIEW;
+  // Zooming to fit leaves room for the outline on the left and the shape legend on the right.
+  fitRef.current = {
+    ...FIT_VIEW,
+    padding: {
+      ...FIT_VIEW.padding,
+      ...(view.options.outline ? { left: "330px" } : {}),
+      ...(view.options.legend ? { right: "600px" } : {}),
+    },
+  };
 
   /**
    * Zooms to the whole flow once React Flow has taken in new positions (a frame or two later).
@@ -1109,9 +1115,10 @@ export function App() {
           disabled={load.status !== "ready" || nodes.length === 0 || mode !== "edit"}
           onClick={() => (tour ? setTour(null) : startTour())}
           title="Go through the flow one step at a time"
+          aria-label={tour ? "End walkthrough" : "Walk through"}
         >
           <Icon name="start" size={12} />
-          {tour ? "End walkthrough" : "Walk through"}
+          <span className={tour ? undefined : "wide-only"}>{tour ? "End walkthrough" : "Walk through"}</span>
         </button>
         <div className="topbar-end">
           <AiPicker />
@@ -1424,8 +1431,13 @@ function SaveIndicator({ state }: { state: SaveState }) {
     );
   }
   return (
-    <span className="save-state" aria-live="polite" data-saving={state.status === "saving" || undefined}>
-      {state.status === "saving" ? "Saving draft…" : "Draft saved"}
+    <span
+      className="save-state"
+      aria-live="polite"
+      data-saving={state.status === "saving" || undefined}
+      title={state.status === "saving" ? "Saving draft…" : "Draft saved"}
+    >
+      <span className="wide-only">{state.status === "saving" ? "Saving draft…" : "Draft saved"}</span>
     </span>
   );
 }

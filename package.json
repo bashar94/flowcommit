@@ -2,6 +2,26 @@
   "name": "flowcommit",
   "version": "0.1.0",
   "license": "Apache-2.0",
+  "author": "Bashar Bhuiyan",
+  "homepage": "https://github.com/bashar94/flowcommit#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bashar94/flowcommit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bashar94/flowcommit/issues"
+  },
+  "keywords": [
+    "flowchart",
+    "ai",
+    "vibe-coding",
+    "claude-code",
+    "codex",
+    "mcp",
+    "version-control",
+    "git",
+    "spec-driven-development"
+  ],
   "description": "Visual version control and an IDE for vibe coders: design your app as a flowchart, let AI agents build it, and keep every version in Git.",
   "private": true,
   "type": "module",
@@ -25,7 +45,8 @@
     "build": "node scripts/build.mjs",
     "start": "node bin/flowcommit.mjs",
     "test:e2e": "npm run build && playwright test",
-    "schema": "tsx scripts/schema.ts"
+    "schema": "tsx scripts/schema.ts",
+    "screenshots": "npm run build && SCREENSHOTS=1 playwright test e2e/screenshots.spec.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
