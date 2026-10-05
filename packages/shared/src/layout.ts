@@ -4,6 +4,7 @@
  *    current path (like "Try again") is a loop, and is ignored for placement.
  * 2. Each step goes one row below the furthest step that leads into it.
  * 3. Within a row, steps sit under the steps that lead into them, which keeps arrows from crossing.
+ *    Steps in the same group sit side by side, so the group's frame doesn't take in other steps.
  */
 
 export const LAYOUT = { cardWidth: 248, rowHeight: 176, cardHeight: 112, rowGap: 64, columnGap: 72 } as const;
@@ -14,6 +15,8 @@ export function layoutFlow(
   roots: string[] = [],
   /** Measured card heights, when known, so tall cards (like screens with images) get room. */
   heights: Map<string, number> = new Map(),
+  /** The group each step is in, if any. */
+  groups: Map<string, string> = new Map(),
 ): Map<string, { x: number; y: number }> {
   const known = new Set(ids);
   const out = new Map(ids.map((id) => [id, [] as string[]]));
@@ -63,9 +66,20 @@ export function layoutFlow(
       const ps = parents.get(id)!.filter((p) => slot.has(p));
       return ps.length ? ps.reduce((sum, p) => sum + slot.get(p)!, 0) / ps.length : Number.POSITIVE_INFINITY;
     };
-    const sorted = r
-      .map((id, i) => ({ id, w: weight(id), i }))
-      .sort((a, b) => (a.w === b.w ? a.i - b.i : a.w - b.w));
+    const items = r.map((id, i) => ({ id, w: weight(id), i, group: groups.get(id) }));
+    // A group is placed where its steps in this row would be on average, and they stay together.
+    const groupWeight = new Map<string, number>();
+    for (const g of new Set(items.map((x) => x.group).filter((g): g is string => !!g))) {
+      const ws = items.filter((x) => x.group === g && Number.isFinite(x.w)).map((x) => x.w);
+      groupWeight.set(g, ws.length ? ws.reduce((a, b) => a + b, 0) / ws.length : Number.POSITIVE_INFINITY);
+    }
+    const key = (x: (typeof items)[number]) => (x.group ? groupWeight.get(x.group)! : x.w);
+    const sorted = items.sort(
+      (a, b) =>
+        key(a) - key(b) ||
+        (a.group ?? "").localeCompare(b.group ?? "") ||
+        (a.w === b.w ? a.i - b.i : a.w - b.w),
+    );
     const width = sorted.length - 1;
     sorted.forEach(({ id }, i) => slot.set(id, i - width / 2));
   }

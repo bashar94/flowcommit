@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -53,7 +53,9 @@ import { Walkthrough } from "./components/Walkthrough.tsx";
 import { arrowTone, decisionSide, isBackEdge, readingNumbers, related } from "./flowView.ts";
 import { KIND_DRAG_TYPE, Palette } from "./components/Palette.tsx";
 import { Inspector, type Selection } from "./components/Inspector.tsx";
-import { CompareView, type Review } from "./components/CompareView.tsx";
+import type { Review } from "./components/CompareView.tsx";
+// History loads the first time it's opened, so the editor starts faster.
+const CompareView = lazy(() => import("./components/CompareView.tsx").then((m) => ({ default: m.CompareView })));
 import { BranchMenu } from "./components/BranchMenu.tsx";
 import { commitLabel, shortSha, type Side } from "./compare.ts";
 import { SaveVersionDialog } from "./components/SaveVersionDialog.tsx";
@@ -62,7 +64,9 @@ import { ProjectMenu } from "./components/ProjectMenu.tsx";
 import { FirstRunTips, tipsSeen } from "./components/FirstRunTips.tsx";
 import { GroupActionsContext, GroupCard, GroupFrames, type GroupActions } from "./components/Groups.tsx";
 import { foldGroups, isGroupCard, newGroupId, type CanvasNode } from "./groups.ts";
-import { download, fileName, flowPicture, printPicture } from "./exportImage.ts";
+import { printPicture } from "./printPicture.ts";
+// The picture library loads only when someone exports.
+const loadExport = () => import("./exportImage.ts");
 import { AiPicker } from "./components/AiPicker.tsx";
 import { useToast } from "./components/Toasts.tsx";
 import { useAi } from "./ai.tsx";
@@ -941,8 +945,9 @@ export function App() {
     setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
     setHoveredId(null);
     // Give the canvas a frame to drop the selection highlight before drawing it.
-    const picture = new Promise<void>((resolve) => setTimeout(resolve, 60)).then(() =>
-      flowPicture(rf as unknown as ReactFlowInstance<Node>),
+    const exporter = loadExport();
+    const picture = Promise.all([exporter, new Promise<void>((resolve) => setTimeout(resolve, 60))]).then(([m]) =>
+      m.flowPicture(rf as unknown as ReactFlowInstance<Node>),
     );
     const title = meta.name || "Flowchart";
     if (format === "pdf") {
@@ -953,9 +958,9 @@ export function App() {
       }
       return;
     }
-    picture.then(
-      (src) => {
-        download(src, fileName(title, "png"));
+    Promise.all([exporter, picture]).then(
+      ([m, src]) => {
+        m.download(src, m.fileName(title, "png"));
         notify("Picture saved to your downloads");
       },
       (err: Error) => notify(`FlowCommit couldn't make the picture: ${err.message}`),
@@ -1090,6 +1095,7 @@ export function App() {
 
       <div className="workspace">
         {mode === "history" ? (
+          <Suspense fallback={<div className="canvas-message">Loading history…</div>}>
           <CompareView
             key={review ? `${review.title}:${review.target.kind === "version" ? review.target.sha : ""}` : "history"}
             state={history.state}
@@ -1102,6 +1108,7 @@ export function App() {
             onRestore={restoreVersion}
             onBranch={branchFromVersion}
           />
+          </Suspense>
         ) : (
           <SyncContext.Provider value={sync.byStep}>
           <BuildContext.Provider value={build.views}>

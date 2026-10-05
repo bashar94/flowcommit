@@ -228,4 +228,15 @@ branch stays as it was.
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for what's built and what's still missing for the first version.
+See [ROADMAP.md](ROADMAP.md) for what's built and what's next.
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains
+how to set up, test and send a change. Please report security problems privately, as
+[SECURITY.md](SECURITY.md) describes.
+
+## License
+
+FlowCommit is open source under the [Apache License 2.0](LICENSE). The FlowCommit name and
+logo aren't covered by the license; [TRADEMARKS.md](TRADEMARKS.md) explains how you can use them.

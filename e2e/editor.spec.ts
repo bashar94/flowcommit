@@ -134,6 +134,12 @@ test("a project with code can be drawn from its code, with those steps marked bu
       },
     }),
   );
+  // Act as if Claude Code is installed, as it won't be on a CI machine.
+  await page.route("**/api/ai", (route) =>
+    route.fulfill({
+      json: { providers: [{ id: "claude", label: "Claude Code", available: true, version: "test", install: "" }] },
+    }),
+  );
   await page.reload();
   await page.getByRole("button", { name: "Draw it from my code" }).click();
   await expect(cards(page)).toHaveCount(6);

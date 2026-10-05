@@ -1,10 +1,11 @@
-import { useId, useRef, useState, type ClipboardEvent } from "react";
+import { Suspense, lazy, useId, useRef, useState, type ClipboardEvent } from "react";
 import { NODE_KINDS, NODE_KIND_INFO, type Attachment, type FlowGroup, type WriteRequest } from "@flowcommit/shared";
 import { api } from "../api.ts";
 import { assetUrl, newId, type ArrowEdge, type FlowMeta, type StepData, type StepNode } from "../model.ts";
 import { Icon } from "../icons.tsx";
 import { AiField } from "./AiField.tsx";
-import { Annotator } from "./Annotator.tsx";
+// The image mark-up editor loads the first time someone opens it.
+const Annotator = lazy(() => import("./Annotator.tsx").then((m) => ({ default: m.Annotator })));
 import { useToast } from "./Toasts.tsx";
 import { WordDiff } from "./ChangeDetails.tsx";
 import { timeAgo } from "../time.ts";
@@ -304,6 +305,7 @@ function NodeDetails({
           const target = data.attachments.find((a) => a.id === markingUp);
           if (!target) return null;
           return (
+            <Suspense fallback={null}>
             <Annotator
               imageUrl={assetUrl(target.src)}
               imageName={target.src}
@@ -319,6 +321,7 @@ function NodeDetails({
                 );
               }}
             />
+            </Suspense>
           );
         })()}
 

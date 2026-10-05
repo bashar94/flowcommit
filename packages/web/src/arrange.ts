@@ -13,6 +13,7 @@ export function arrange(nodes: StepNode[], edges: ArrowEdge[]): { nodes: StepNod
     edges,
     starts,
     heights,
+    new Map(nodes.filter((n) => n.data.group).map((n) => [n.id, n.data.group!])),
   );
 
   const placed = nodes.map((n) => {

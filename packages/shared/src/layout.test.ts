@@ -54,3 +54,14 @@ test("a tall card pushes the next row down", () => {
   const pos = layoutFlow(["a", "b"], [{ source: "a", target: "b" }], [], new Map([["a", 400]]));
   assert.equal(pos.get("b")!.y, 400 + LAYOUT.rowGap);
 });
+
+test("steps in the same group are placed side by side", () => {
+  // start leads to four steps; a and c are in one group, so b mustn't land between them.
+  const ids = ["start", "a", "b", "c", "d"];
+  const edges = ids.slice(1).map((id) => ({ source: "start", target: id }));
+  const pos = layoutFlow(ids, edges, ["start"], new Map(), new Map([["a", "g"], ["c", "g"]]));
+  const order = ids.slice(1).sort((x, y) => pos.get(x)!.x - pos.get(y)!.x);
+  const ia = order.indexOf("a");
+  const ic = order.indexOf("c");
+  assert.equal(Math.abs(ia - ic), 1, `a and c should be neighbors, got ${order.join(" ")}`);
+});

@@ -1,0 +1,36 @@
+name: Something isn't working
+description: Report a bug in FlowCommit
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can we see it ourselves?
+      placeholder: |
+        1. Start from the Online store template
+        2. Select Cart and press ⌘G
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: FlowCommit version
+      description: Run `flowcommit --version`, or give the commit if you run it from source.
+  - type: dropdown
+    id: ai
+    attributes:
+      label: Which AI tool were you using?
+      options: [None, Claude Code, Codex CLI, Other]
+  - type: input
+    id: system
+    attributes:
+      label: Computer and browser
+      placeholder: macOS 15, Chrome 140

@@ -1,6 +1,7 @@
 {
   "name": "flowcommit",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "description": "Visual version control and an IDE for vibe coders: design your app as a flowchart, let AI agents build it, and keep every version in Git.",
   "private": true,
   "type": "module",

@@ -15,7 +15,7 @@ export default defineConfig({
   reporter: [["list"]],
   use: {
     baseURL: `http://localhost:${PORT}`,
-    channel: "chrome",
+    channel: process.env.E2E_CHANNEL ?? "chrome",
     headless: true,
     viewport: { width: 1440, height: 900 },
     trace: "retain-on-failure",

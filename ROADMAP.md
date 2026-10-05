@@ -28,14 +28,20 @@
   projects, new projects; the local server only answers this computer's own pages
 - Tests: shared logic (`npm test`) and the editor end to end (`npm run test:e2e`)
 
-## Before a public release
+## Before the repo goes public
 
-| Feature | Why |
+Done: license, contributing and security files, CI, issue templates, Tidy up that keeps groups
+together, and loading History, mark-up and export only when they're first used.
+
+| To do | Why |
 |---|---|
-| Publish to npm | So `npx flowcommit` works without cloning this repo. Needs a package name check and a release process. |
-| Session token for the local server | Host and Origin checks already block other websites; a per-session token would also stop other programs on the computer from using it. |
-| Tidy up that keeps groups together | Today Tidy up lays out all steps at once and can spread a group's steps apart. |
-| Smaller editor bundle | The editor is one 680 kB script; splitting off History and the image editor would make it load faster. |
+| Plugin API | Stable connection points (template sources, sync storage, build runners, share targets, sign-in) so paid services can plug in without changing this repo. |
+| `flow.json` spec and JSON Schema | A documented, versioned format, so nobody is locked in and other tools can read flows. |
+| Publish to npm | So `npx flowcommit` works without cloning this repo. |
+
+A password (token) for the local server was considered and left out: it only guards against
+other programs on the same computer, which can already read the project folder. See
+[SECURITY.md](SECURITY.md).
 
 ## Later
 
